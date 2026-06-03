@@ -5,47 +5,71 @@
 #include "oscillator.h"
 #include "voice.h"
 #include "MCP4251.h" //Digipot
-#include "pwm_zen.h" //customized PWM library
 #include "BD79702.h" //DAC
-#include "modulator.h"
+#include "modulator.h" //Software modulators
 #include "hw_adsr.h"
 #include "analogInputs.h"
+#include <functional>
+
+constexpr float x = 0.51; //sets the middle of the curve on x-axis
+constexpr float k = 3.8; //sets the curve severity
+//x0: sets middle of the curve on x-axis, k: sets curve steepness
+std::function<float(float)> makeSCurveClosure(float x0, float k) {
+    //precompute offset and denominator
+    float offset = 1 / (1 + exp(-k * (0 - x0)));
+    float scale = 1 / (1 / (1 + exp(-k * (1 - x0))) - offset);
+
+    //return lambda that will apply s-curve to compensate for imperfect log approximation circuit
+    return [x0, k, offset, scale](float position) {
+        float sCurve = 1 / (1 + exp(-k * (position - x0)));
+        return (sCurve - offset) * scale;
+    };
+}
 
 BD79702 DAC0(8);
-BD79702::CHAN SUSTAIN = BD79702::AO1, LFO_RATE = BD79702::AO2, VCF_CUT = BD79702::AO3,
-    TEST_OUT = BD79702::AO4; //output to experiment with
+Dac sustainDac = DAC0.getChannel(BD79702::AO1);
+Dac lfoRateDac = DAC0.getChannel(BD79702::AO2);
+Dac vcfCutDac = DAC0.getChannel(BD79702::AO3);
+Dac vcaDac = DAC0.getChannel(BD79702::AO4);
 
-FspTimer tickTimer; //GPT4
+MCP4251 digiPot1; //50k
+DigiPot lfoToPitchPot = digiPot1.getChannel(MCP4251::POT0, { true, true, makeSCurveClosure(0.51, 3.8) });
+DigiPot envToPitchPot = digiPot1.getChannel(MCP4251::POT1, { .disconnectAtMin = true });
+DigiPot pwmPot = digiPot1.getChannel(MCP4251::POT2, { .invert = true });
+DigiPot lfoToVcfPot = digiPot1.getChannel(MCP4251::POT3, { .disconnectAtMin = true });
+
+MCP4251 digiPot2(9); //10k
+DigiPot envToVcfPot = digiPot2.getChannel(MCP4251::POT0, { .invert = true });
+DigiPot resonancePot = digiPot2.getChannel(MCP4251::POT1, { .invert = true });
+DigiPot volumePot = digiPot2.getChannel(MCP4251::POT2);
+DigiPot vcfDrivePot = digiPot2.getChannel(MCP4251::POT3, { .invert = true });
+
+//hardware ADSR, use DAC for sustain
+HW_adsr adsr(D3, D5, D4, &sustainDac);
+
+touchStrip touchStrip;
 
 SW_LFO pwmLFO;
 SW_DA pwmDA; //delay attack envelope
 SW_ADSR pwmADSR;
 SW_ADSR accentADSR;
 SW_ADSR vcaADSR;
-//hardware ADSR, use DAC for sustain
-HW_adsr adsr(D3, D5, D4, &DAC0, SUSTAIN);
-touchStrip touchStrip;
 
+FspTimer tickTimer; //GPT4
 bool stepFlag = false; //modulation tick
 
 void tickClock(timer_callback_args_t *args) { stepFlag = true; }
 
 //128x32 I2C OLED on pins A4 (data) & A5 (clock)
 //U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-
 //const char *const noteNames[12] = { "A", "A#/Bb", "B", "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab" };
 
 Voice voice; //voice contains Osc
 MIDI midi;
-MCP4251 digiPot1; //50k
-MCP4251::Pot LFO_DEPTH = MCP4251::POT0, PWM_POT = MCP4251::POT2; //ENV_PITCH
-MCP4251 digiPot2(9); //10k
-MCP4251::Pot ENV_AMT = MCP4251::POT0, RESONANCE = MCP4251::POT1, unused = MCP4251::POT2, VCF_DRIVE = MCP4251::POT3;
 
 //MIDI callbacks-----------------------------------------------------
 void noteOnHandler(uint8_t note, uint8_t vel);
 void noteOffHandler(uint8_t note, uint8_t vel);
-void pitchBendHandler(int16_t bend);
 void midiCcHandler(uint8_t cc, uint8_t val);
 
 uint8_t pressedKeys[127]; //hold all currently pressed notes
@@ -53,9 +77,8 @@ uint8_t pressedKeys[127]; //hold all currently pressed notes
 uint8_t keyCount = 0;
 bool glideLegato = true; //only slide when pressing more than one note
 float glideRate = 1; //used to turn off glide at minimum
-bool invertSaw = false; //inverts saw relative to pulse 1 & 2
-Oscillator::Waveform waveform = Oscillator::SAW;
 
+//TODO: make the VCF part of the voice
 float vcfOffset = .5;
 float keyTracking = .3;
 
@@ -63,7 +86,7 @@ void updateVCF() {
     float newVCFcut = vcfOffset + ((keyTracking == 0) ? 0 : ((voice.osc.currentNote / 127.0) * keyTracking));
     newVCFcut += accentADSR.output * 0.25; //TODO: adjust accent depth
     if (newVCFcut > 1) newVCFcut = 1; //cap at max
-    DAC0.setDAC(VCF_CUT, newVCFcut * 255);
+    vcfCutDac.write(newVCFcut);
 }
 
 void setup() {
@@ -74,49 +97,33 @@ void setup() {
     //Terminal needs RTS/CTS flow to work!
     //while (!Serial) {} //wait for debug serial port to connect
 
-    midi.noteOn = noteOnHandler; //callbacks
-    midi.noteOff = noteOffHandler;
-    midi.pitchBend = pitchBendHandler;
-    midi.controlChange = midiCcHandler;
-
     Oscillator::initTimer(); //start timer for measuring frequency
-
-    //u8g2.begin(); //start OLED
-
-    pinMode(LED_BUILTIN, OUTPUT);
-    //digitalWrite(LED_BUILTIN, HIGH);
 
     analogWriteResolution(12); //change DAC to 12-bit resolution
 
     DAC0.begin();
-    DAC0.setDAC(LFO_RATE, 127);
-    DAC0.setDAC(VCF_CUT, 127);
+    lfoRateDac.write(0.5);
+    vcfCutDac.write(0.5);
 
     adsr.begin(); //starts PMW timers
 
     //Digipot--------------------------------------------------------
     digiPot1.begin();
-    digiPot1.setWiper(PWM_POT, 127);
-    digiPot1.setWiper(LFO_DEPTH, 0);
-    digiPot1.setWiper(ENV_AMT, 255); //Env to VCF
+    pwmPot.write(1); //max
+    lfoToPitchPot.write(0); //min
+    envToVcfPot.write(.5); //Env to VCF
 
     digiPot2.begin();
-    digiPot2.setWiper(ENV_AMT, 127);
-    digiPot2.setWiper(RESONANCE, 127);
-    //digiPot2.setWiper(?, 127);
-    digiPot2.setWiper(VCF_DRIVE, 127);
+    resonancePot.write(.1);
+    vcfDrivePot.write(0);
 
-    midiCcHandler(1, 0); //LFO depth
-
-    //startup message
-//    u8g2.clearBuffer();
-//    u8g2.setFont(u8g2_font_6x13_tr);
+//    u8g2.begin(); //start OLED
 //    u8g2.setPowerSave(true); //turn display off
 
     voice.osc.calibrate(); //call CV calibration routine
     //NVIC_DisableIRQ(AGT0_INT_IRQn);
 
-    //log a series of measurements
+    //log a series of measurements for HF trim adjustment
 //    osc.start();
 //    for (uint16_t note = 24; note <= 108; note++) {
 //        osc.setNote(note);
@@ -132,7 +139,13 @@ void setup() {
     tickTimer.open();
     tickTimer.start();
 
-    Serial.println("Setup done");
+    //MIDI callbacks
+    midi.noteOn = noteOnHandler;
+    midi.noteOff = noteOffHandler;
+    midi.controlChange = midiCcHandler;
+    midi.pitchBend = [](int16_t bend) {
+        voice.setPitchBend(bend);
+    };
 
     //set touchstrips callbacks
     touchStrip.pressedCB = [](float reading){
@@ -183,18 +196,17 @@ void loop() {
         //update modulation. send values to digiPots
         pwmLFO.step();
         pwmDA.step();
-        //scale and offset LFO
-        uint8_t pwmValue = 255 - (((pwmLFO.output * pwmDA.output) + 1) * (127 / 2));
         //pwmADSR.step();
-        //uint8_t pwmValue = 255 - (pwmADSR.output * 127);
-        digiPot1.setWiper(PWM_POT, pwmValue); //PWM & super saw adjust
+        //scale and offset LFO
+        float pwmValue = pwmLFO.offset + (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
+        pwmPot.write(pwmValue / 2); //max
 
         accentADSR.step();
         updateVCF(); //update keytracking
 
         vcaADSR.step();
         //TODO: remove. testing VCA with LFO output
-        DAC0.setDAC(LFO_RATE, ((1 - vcaADSR.output) * 255));
+        lfoRateDac.write(1 - vcaADSR.output);
 
         touchStrip.poll();
     }
@@ -260,37 +272,11 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
     }
 }
 
-void pitchBendHandler(int16_t bend) {
-    voice.setPitchBend(bend);
-}
-
 void midiCcHandler(uint8_t cc, uint8_t val) {
-    //need CC to change glide type and glide legato mode
     switch (cc) {
         case 1: { //Mod wheel
             float normVal = val / 127.0;
-
-            //LFO depth
-            if (normVal == 0.0) { //disconnect POT leg at minimum value
-                digiPot1.disconnectLeg(LFO_DEPTH, MCP4251::B);
-            } else {
-                //reconnect leg
-                if (digiPot1.getLegStatus(LFO_DEPTH, MCP4251::B))
-                    digiPot1.connectLeg(LFO_DEPTH, MCP4251::B);
-
-                //apply S-curve to compensate for imperfect log approximation circuit
-                constexpr float x = 0.51; //sets the middle of the curve on x-axis
-                constexpr float k = 3.8; //sets the curve severity
-                //precomputed offset and denominator
-                constexpr float offset = 0.125867742017; // = 1 / (1 + exp(-k * (0 - x)));
-                constexpr float scale = 255 / (0.865529894061 - offset); // = 1 / (1 + exp(-k * (1 - x))) - offset;
-
-                //apply s-curve formula
-                float sCurve = 1 / (1 + exp(-k * (normVal - x)));
-                sCurve = (sCurve - offset) * scale;
-                digiPot1.setWiper(LFO_DEPTH, (255 - sCurve));
-            }
-
+            lfoToPitchPot.write(normVal);
             break;
         }
         case 5: //Portamento Time
@@ -336,7 +322,8 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
         case 13: //PWM & super saw adjust
             //only use half of pot
-            digiPot1.setWiper(PWM_POT, 255 - val ); //PWM & super saw adjust
+//            digiPot1.setWiper(PWM_POT, 255 - val ); //PWM & super saw adjust
+            pwmPot.write(1 - (val / 127.0));
             break;
 
         case 14: //VCF Cut
@@ -346,12 +333,11 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
         case 15: //Waveform select
             //use the upper 4 bits to select from 16 waveforms
-            waveform = static_cast<Oscillator::Waveform>((val * 20) / 127);
-            voice.osc.setWaveform(waveform);
+            voice.osc.setWaveform(static_cast<Oscillator::Waveform>((val * 20) / 127));
             break;
 
         case 16: //VCF Drive
-            digiPot2.setWiper(VCF_DRIVE, 255 - (val << 1));
+            vcfDrivePot.write(val / 127.0);
             break;
 
         case 17: //Soft LFO for PWM
@@ -367,7 +353,7 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 20: //PWM offset
-            pwmLFO.offset = (val * 2 / 127.0) - 1;
+            pwmLFO.offset = val / 127.0; //(val * 2 / 127.0) - 1;
             break;
 
         case 21:
@@ -390,7 +376,6 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
         case 25: {
             //invertSaw = (val >= 64);
-            //voice.osc.setWaveform(waveform, invertSaw);
             pwmADSR.sampHoldClock.setRate(val / 127.0);
             pwmADSR.sampleHold = !!(val);
             break;
@@ -413,15 +398,15 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 71: //Resonance
-            digiPot2.setWiper(RESONANCE, 255 - (val << 1)); //VCF resonance
+            resonancePot.write(val / 127.0); //VCF resonance
             break;
 
         case 72: //LFO rate
-            //DAC0.setDAC(LFO_RATE, 255 - (val << 1));
+            lfoRateDac.write(1 - (val / 127.0));
             break;
 
         case 73: //Env depth
-            digiPot2.setWiper(ENV_AMT, 255 - (val << 1)); //Env to VCF
+            envToVcfPot.write(val / 127.0); //Env to VCF
             break;
 
         default:
@@ -439,50 +424,3 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 //            const float q = 10.7; //8.8;
 //            float expoApprox = normVal - (w * (normVal - pow(normVal, q)));
 //-----------------------------------------------------------------------------------
-
-//// ADC register access
-//#define ADC0_BASE 0x4005C000
-//
-//// Configure ADC for single conversion
-//void setupADC(int channel) {
-//  // Enable ADC module
-//  R_MSTP->MSTPCRC_b.MSTPC31 = 0;  // Enable ADC0
-//
-//  // Configure channel (0-7 for analog pins A0-A7)
-//  R_ADC0->ADANSA_b[0].ANSA0 = 1;  // Select channel
-//
-//  // Set 12-bit resolution
-//  R_ADC0->ADCER_b.ADPRC = 0;  // 12-bit
-//
-//  // Configure for software trigger, single scan
-//  R_ADC0->ADCSR_b.ADCS = 0;   // Single scan mode
-//  R_ADC0->ADCSR_b.TRGE = 0;   // Software trigger
-//
-//  // Optional: Enable conversion complete interrupt
-//  R_ADC0->ADCSR_b.ADIE = 1;   // Enable interrupt
-//  NVIC_EnableIRQ(ADC0_SCAN_END_IRQn);
-//}
-//
-//// Start conversion (non-blocking)
-//void startADC() {
-//  R_ADC0->ADCSR_b.ADST = 1;  // Start conversion
-//}
-//
-//// Check if conversion is complete
-//bool isADCComplete() {
-//  return R_ADC0->ADCSR_b.ADST == 0;  // ADST clears when done
-//}
-//
-//// Read result
-//uint16_t readADC(int channel) {
-//  return R_ADC0->ADDR[channel];  // Read result register
-//}
-//
-//// Optional: ISR for conversion complete
-//volatile bool adcReady = false;
-//volatile uint16_t adcValue = 0;
-//
-//extern "C" void adc0_scan_end_isr(void) {
-//  adcValue = R_ADC0->ADDR[0];  // Read channel 0
-//  adcReady = true;
-//}

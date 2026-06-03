@@ -7,7 +7,7 @@ void BD79702::begin() {
     SPI.begin();
 }
 
-void BD79702::setDAC(CHAN chan, uint8_t value) {
+void BD79702::setDAC(Chan chan, uint8_t value) {
     writeRegister((uint8_t) chan, value);
 }
 

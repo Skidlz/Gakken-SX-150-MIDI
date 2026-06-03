@@ -28,7 +28,8 @@ void SW_LFO::step() { //progress by one tick
     }
 
     //+- 1 when scale = 1, offset = 0
-    output = (tempOut * 2 * scale) - 1 + offset; //scale and offset
+//    output = (tempOut * 2 * scale) - 1 + offset; //scale and offset
+    output = (tempOut * 2) - 1;
 }
 
 void SW_LFO::gateOn() { //reset LFO
