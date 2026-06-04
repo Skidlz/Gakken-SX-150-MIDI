@@ -2,12 +2,12 @@
 //#include <U8g2lib.h>
 #include "FspTimer.h"
 #include "midi.h"
-#include "oscillator.h"
+#include "hw_vco.h"
+#include "hw_adsr.h"
 #include "voice.h"
 #include "MCP4251.h" //Digipot
 #include "BD79702.h" //DAC
 #include "modulator.h" //Software modulators
-#include "hw_adsr.h"
 #include "analogInputs.h"
 #include <functional>
 
@@ -34,9 +34,9 @@ Dac vcaDac = DAC0.getChannel(BD79702::AO4);
 
 MCP4251 digiPot1; //50k
 DigiPot lfoToPitchPot = digiPot1.getChannel(MCP4251::POT0, { true, true, makeSCurveClosure(0.51, 3.8) });
-DigiPot envToPitchPot = digiPot1.getChannel(MCP4251::POT1, { .disconnectAtMin = true });
+DigiPot envToPitchPot = digiPot1.getChannel(MCP4251::POT1, { .invert = false, .disconnectAtMin = true });
 DigiPot pwmPot = digiPot1.getChannel(MCP4251::POT2, { .invert = true });
-DigiPot lfoToVcfPot = digiPot1.getChannel(MCP4251::POT3, { .disconnectAtMin = true });
+DigiPot lfoToVcfPot = digiPot1.getChannel(MCP4251::POT3, { .invert = false, .disconnectAtMin = true });
 
 MCP4251 digiPot2(9); //10k
 DigiPot envToVcfPot = digiPot2.getChannel(MCP4251::POT0, { .invert = true });
@@ -45,14 +45,13 @@ DigiPot volumePot = digiPot2.getChannel(MCP4251::POT2);
 DigiPot vcfDrivePot = digiPot2.getChannel(MCP4251::POT3, { .invert = true });
 
 //hardware ADSR, use DAC for sustain
-HW_adsr adsr(D3, D5, D4, &sustainDac);
+HW_adsr adsr(D3, D5, D4, sustainDac);
 
 touchStrip touchStrip;
 
 SW_LFO pwmLFO;
 SW_DA pwmDA; //delay attack envelope
 SW_ADSR pwmADSR;
-SW_ADSR accentADSR;
 SW_ADSR vcaADSR;
 
 FspTimer tickTimer; //GPT4
@@ -64,7 +63,7 @@ void tickClock(timer_callback_args_t *args) { stepFlag = true; }
 //U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 //const char *const noteNames[12] = { "A", "A#/Bb", "B", "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab" };
 
-Voice voice; //voice contains Osc
+Voice voice(vcfCutDac, resonancePot); //voice contains Osc
 MIDI midi;
 
 //MIDI callbacks-----------------------------------------------------
@@ -75,19 +74,6 @@ void midiCcHandler(uint8_t cc, uint8_t val);
 uint8_t pressedKeys[127]; //hold all currently pressed notes
 //allows us to fall back to previously pressed note after release
 uint8_t keyCount = 0;
-bool glideLegato = true; //only slide when pressing more than one note
-float glideRate = 1; //used to turn off glide at minimum
-
-//TODO: make the VCF part of the voice
-float vcfOffset = .5;
-float keyTracking = .3;
-
-void updateVCF() {
-    float newVCFcut = vcfOffset + ((keyTracking == 0) ? 0 : ((voice.osc.currentNote / 127.0) * keyTracking));
-    newVCFcut += accentADSR.output * 0.25; //TODO: adjust accent depth
-    if (newVCFcut > 1) newVCFcut = 1; //cap at max
-    vcfCutDac.write(newVCFcut);
-}
 
 void setup() {
     Serial1.begin(31250); //MIDI baud
@@ -102,10 +88,9 @@ void setup() {
     analogWriteResolution(12); //change DAC to 12-bit resolution
 
     DAC0.begin();
+    //TODO: make array in init values
     lfoRateDac.write(0.5);
     vcfCutDac.write(0.5);
-
-    adsr.begin(); //starts PMW timers
 
     //Digipot--------------------------------------------------------
     digiPot1.begin();
@@ -116,6 +101,8 @@ void setup() {
     digiPot2.begin();
     resonancePot.write(.1);
     vcfDrivePot.write(0);
+
+    adsr.begin(); //starts PMW timers
 
 //    u8g2.begin(); //start OLED
 //    u8g2.setPowerSave(true); //turn display off
@@ -143,9 +130,7 @@ void setup() {
     midi.noteOn = noteOnHandler;
     midi.noteOff = noteOffHandler;
     midi.controlChange = midiCcHandler;
-    midi.pitchBend = [](int16_t bend) {
-        voice.setPitchBend(bend);
-    };
+    midi.pitchBend = [](int16_t bend) { voice.setPitchBend(bend); };
 
     //set touchstrips callbacks
     touchStrip.pressedCB = [](float reading){
@@ -166,6 +151,8 @@ void setup() {
 
         voice.osc.setNote(reading * 80 + 24); //play note
     };
+
+    //voice.setGlideRate(.25);
 }
 
 void loop() {
@@ -190,9 +177,6 @@ void loop() {
     if (stepFlag) { //4kHz
         stepFlag = false;
 
-        //only glide when key(s) held
-        if (keyCount) voice.updateGlide();
-
         //update modulation. send values to digiPots
         pwmLFO.step();
         pwmDA.step();
@@ -201,8 +185,7 @@ void loop() {
         float pwmValue = pwmLFO.offset + (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
         pwmPot.write(pwmValue / 2); //max
 
-        accentADSR.step();
-        updateVCF(); //update keytracking
+        voice.update(); //glide, keytrack, etc
 
         vcaADSR.step();
         //TODO: remove. testing VCA with LFO output
@@ -229,17 +212,10 @@ void noteOnHandler(uint8_t note, uint8_t vel) {
     if (find(pressedKeys, arrEnd, note) == arrEnd)
         pressedKeys[keyCount++] = note;
 
-    //turn glide on if more than one note is pressed
-    if (keyCount > 1 && glideLegato && glideRate > 0.0) voice.glideOn = true;
-
     voice.noteOn(note, vel);
     pwmADSR.gateOn(); //TODO: add legato trigger option
     vcaADSR.gateOn();
     pwmDA.gateOn();
-
-    if (vel > 100) accentADSR.gateOn();
-
-    updateVCF(); //keytracking
 
     //extra envelope for accent
     //digiPot.setWiper(ENV_AMT, (vel > 100) ? 255: 220); //Env to VCF
@@ -267,23 +243,17 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
         voice.noteOff(pressedKeys[keyCount - 1], vel);
         pwmADSR.gateOff();
         vcaADSR.gateOff();
-        accentADSR.gateOff();
-        if (glideLegato) voice.glideOn = false;
     }
 }
 
 void midiCcHandler(uint8_t cc, uint8_t val) {
     switch (cc) {
-        case 1: { //Mod wheel
-            float normVal = val / 127.0;
-            lfoToPitchPot.write(normVal);
+        case 1: //Mod wheel
+            lfoToPitchPot.write(val / 127.0);
             break;
-        }
+
         case 5: //Portamento Time
-            //voice.glideRate = val / 127.0;
-//            glideRate = val / 127.0;
-//            voice.glideOn = !!val; //force portamento on. could let another CC control it?
-//            voice.setGlideRate(val / 127.0);
+            //voice.setGlideRate(val / 127.0);
 
             pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
             break;
@@ -327,8 +297,8 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 14: //VCF Cut
-            vcfOffset = val / 127.0;
-            updateVCF();
+            voice.vcf.cut = val / 127.0;
+            voice.vcf.updateCut(voice.currentGlideNote, voice.accentADSR.output * 0.25);
             break;
 
         case 15: //Waveform select
@@ -368,9 +338,9 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
             break;
 
-        case 24: { //VCF keytracking
-            keyTracking = val / 127.0;
-            updateVCF();
+        case 24: { //VCF key tracking
+            voice.vcf.keyTracking = val / 127.0;
+            voice.vcf.updateCut(voice.currentGlideNote, voice.accentADSR.output * 0.25);
             break;
         }
 
@@ -398,7 +368,7 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 71: //Resonance
-            resonancePot.write(val / 127.0); //VCF resonance
+            voice.vcf.updateResonance(val / 127.0);
             break;
 
         case 72: //LFO rate

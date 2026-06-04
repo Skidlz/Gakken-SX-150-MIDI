@@ -36,12 +36,10 @@ void HW_adsr::setSustain(float sustain) {
     //only use half the range because env maxes out at 2.5V
     //TODO: fix this in hardware
 
-    _dac->write( sustain * 0.5);
+    _dac.write( sustain * 0.5);
 }
 
-HW_adsr::HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac* dac) {
-    _dac = dac;
-
+HW_adsr::HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac) : _dac(dac){
     //set up the stages. Note: pins used must support PWM
     _stages[ATTACK] = { 58/127.0, 18/127.0, 500000.0, 0, .1, new PWM(atk_pin) };
     _stages[DECAY] = { 103/127.0, 0, 50000.0, 0, .5, new PWM(dec_pin) };

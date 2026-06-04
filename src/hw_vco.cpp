@@ -1,4 +1,4 @@
-#include "oscillator.h"
+#include "hw_vco.h"
 #include <math.h>
 
 //Library to control modified hardware oscillator in Gakken SX-150

@@ -6,7 +6,7 @@
 
 class HW_adsr {
 public:
-    HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac* dac);
+    HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac);
 
     //PWM stages are first, then sustain
     enum Stage { ATTACK, DECAY, RELEASE, SUSTAIN, STAGE_COUNT};
@@ -29,6 +29,6 @@ private:
         PWM* timer;
     };
 
-    Dac* _dac; //pointer to external DAC object
+    Dac& _dac; //pointer to external DAC object
     stage _stages[3]; //hold all PWM stages
 };
