@@ -26,6 +26,7 @@ std::function<float(float)> makeSCurveClosure(float x0, float k) {
     };
 }
 
+//Hardware IO--------------------------------------------------------------------------------------
 BD79702 DAC0(8);
 Dac sustainDac = DAC0.getChannel(BD79702::AO1);
 Dac lfoRateDac = DAC0.getChannel(BD79702::AO2);
@@ -44,29 +45,26 @@ DigiPot resonancePot = digiPot2.getChannel(MCP4251::POT1, { .invert = true });
 DigiPot volumePot = digiPot2.getChannel(MCP4251::POT2);
 DigiPot vcfDrivePot = digiPot2.getChannel(MCP4251::POT3, { .invert = true });
 
-//hardware ADSR, use DAC for sustain
 HW_adsr adsr(D3, D5, D4, sustainDac);
 
 touchStrip touchStrip;
 
-SW_LFO pwmLFO;
-SW_DA pwmDA; //delay attack envelope
-SW_ADSR pwmADSR;
+Voice voice(vcfCutDac, resonancePot, pwmPot);
+
+//Software modulation------------------------------------------------------------------------------
 SW_ADSR vcaADSR;
 
+//timer
 FspTimer tickTimer; //GPT4
 bool stepFlag = false; //modulation tick
-
 void tickClock(timer_callback_args_t *args) { stepFlag = true; }
 
 //128x32 I2C OLED on pins A4 (data) & A5 (clock)
 //U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 //const char *const noteNames[12] = { "A", "A#/Bb", "B", "C", "C#/Db", "D", "D#/Eb", "E", "F", "F#/Gb", "G", "G#/Ab" };
 
-Voice voice(vcfCutDac, resonancePot); //voice contains Osc
-MIDI midi;
-
 //MIDI callbacks-----------------------------------------------------
+MIDI midi;
 void noteOnHandler(uint8_t note, uint8_t vel);
 void noteOffHandler(uint8_t note, uint8_t vel);
 void midiCcHandler(uint8_t cc, uint8_t val);
@@ -134,25 +132,20 @@ void setup() {
 
     //set touchstrips callbacks
     touchStrip.pressedCB = [](float reading){
-        pwmADSR.gateOn();
-        vcaADSR.gateOn();
-        voice.osc.start(); //gate pin
-        voice.osc.setNote(reading * 80 + 24); //play note
+        float scaledNote = reading * 80 + 24;
+        voice.noteOn(scaledNote, 100);
     };
 
     touchStrip.updatedCB = [](float reading){
-        voice.osc.setNote(reading * 80 + 24); //play note
+        float scaledNote = reading * 80 + 24;
+        voice.osc.setNote(scaledNote); //play note
     };
 
     touchStrip.releasedCB = [](float reading){
-        pwmADSR.gateOff();
-        vcaADSR.gateOff();
-        voice.osc.stop(); //gate pin
-
-        voice.osc.setNote(reading * 80 + 24); //play note
+        float scaledNote = reading * 80 + 24;
+        voice.noteOff(scaledNote, 100);
+        voice.osc.setNote(scaledNote); //play note
     };
-
-    //voice.setGlideRate(.25);
 }
 
 void loop() {
@@ -176,14 +169,6 @@ void loop() {
 
     if (stepFlag) { //4kHz
         stepFlag = false;
-
-        //update modulation. send values to digiPots
-        pwmLFO.step();
-        pwmDA.step();
-        //pwmADSR.step();
-        //scale and offset LFO
-        float pwmValue = pwmLFO.offset + (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
-        pwmPot.write(pwmValue / 2); //max
 
         voice.update(); //glide, keytrack, etc
 
@@ -213,12 +198,7 @@ void noteOnHandler(uint8_t note, uint8_t vel) {
         pressedKeys[keyCount++] = note;
 
     voice.noteOn(note, vel);
-    pwmADSR.gateOn(); //TODO: add legato trigger option
     vcaADSR.gateOn();
-    pwmDA.gateOn();
-
-    //extra envelope for accent
-    //digiPot.setWiper(ENV_AMT, (vel > 100) ? 255: 220); //Env to VCF
 }
 
 void noteOffHandler(uint8_t note, uint8_t vel) {
@@ -241,7 +221,6 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
         voice.noteOn(pressedKeys[keyCount - 1], vel);
     else {
         voice.noteOff(pressedKeys[keyCount - 1], vel);
-        pwmADSR.gateOff();
         vcaADSR.gateOff();
     }
 }
@@ -255,19 +234,19 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
         case 5: //Portamento Time
             //voice.setGlideRate(val / 127.0);
 
-            pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
+            voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
             break;
 
         case 6:
-            pwmADSR.setRate(SW_ADSR::DECAY, val / 127.0);
+            voice.osc.pwmADSR.setRate(SW_ADSR::DECAY, val / 127.0);
             break;
 
         case 7:
-            pwmADSR.setRate(SW_ADSR::SUSTAIN, val / 127.0);
+            voice.osc.pwmADSR.setRate(SW_ADSR::SUSTAIN, val / 127.0);
             break;
 
         case 8:
-            pwmADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
+            voice.osc.pwmADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
             break;
 
         case 9: //attack
@@ -311,27 +290,27 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 17: //Soft LFO for PWM
-            pwmLFO.setRate(val / 127.0);
+            voice.osc.pwmLFO.setRate(val / 127.0);
             break;
 
         case 18: //Soft LFO waveform
-            pwmLFO.setWaveform(static_cast<SW_LFO::Waveform>((val >> 5) & 0b11));
+            voice.osc.pwmLFO.setWaveform(static_cast<SW_LFO::Waveform>((val >> 5) & 0b11));
             break;
 
         case 19: //Soft LFO depth
-            pwmLFO.scale = val / 127.0;
+            voice.osc.pwmLFO.scale = val / 127.0;
             break;
 
         case 20: //PWM offset
-            pwmLFO.offset = val / 127.0; //(val * 2 / 127.0) - 1;
+            voice.osc.pwmLFO.offset = val / 127.0; //(val * 2 / 127.0) - 1;
             break;
 
         case 21:
-            pwmDA.setRate(SW_DA::DELAY, val / 127.0);
+            voice.osc.pwmDA.setRate(SW_DA::DELAY, val / 127.0);
             break;
 
         case 22:
-            pwmDA.setRate(SW_DA::ATTACK, val / 127.0);
+            voice.osc.pwmDA.setRate(SW_DA::ATTACK, val / 127.0);
             break;
 
         case 23:
@@ -346,8 +325,8 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
         case 25: {
             //invertSaw = (val >= 64);
-            pwmADSR.sampHoldClock.setRate(val / 127.0);
-            pwmADSR.sampleHold = !!(val);
+            voice.osc.pwmADSR.sampHoldClock.setRate(val / 127.0);
+            voice.osc.pwmADSR.sampleHold = !!(val);
             break;
         }
 

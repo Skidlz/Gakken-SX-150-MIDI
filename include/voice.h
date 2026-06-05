@@ -30,7 +30,7 @@ public:
     float currentNote = osc.NOTE_A4; //current note without any glide, modulation, bend
     float currentGlideNote = osc.NOTE_A4; //current note without any modulation,bend
 
-    Voice(Dac& vcfCutDac, DigiPot& resPot);
+    Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot);
     void setGlideRate(float rate);
     void updateGlide(); //call periodically to update glide progress
     void noteOn(uint8_t note, uint8_t vel);

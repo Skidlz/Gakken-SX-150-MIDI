@@ -3,7 +3,7 @@
 
 //Library to control modified hardware oscillator in Gakken SX-150
 
-Oscillator::Oscillator() {
+Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot) {
     currentNote = 0;
     running = false;
     tuneScaling = 1.0;
@@ -158,4 +158,13 @@ void Oscillator::initTimer() { //hardware timer setup
     //TODO: setup timer overflow interrupt?
 
     timerInitialized = true;
+}
+
+
+void Oscillator::updatePWM(float offset) {
+    //DA envelope fade in LFO
+    float adjustedLFO = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
+    float newPWM = pulseWidth + adjustedLFO + offset;
+
+    _pwmPot.write(newPWM / 2); //max
 }

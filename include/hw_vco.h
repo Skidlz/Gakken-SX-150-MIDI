@@ -1,6 +1,9 @@
 #pragma once
 
 #include <Arduino.h>
+#include "modulator.h" //Software modulators
+#include "MCP4251.h" //Digipot
+#include "BD79702.h" //DAC
 
 class Oscillator {
 public:
@@ -13,7 +16,7 @@ public:
     float currentNote;
     bool running;
 
-    Oscillator();
+    Oscillator(DigiPot& pwmPot);
 
     void setNote(float note);
     void calibrate();
@@ -21,6 +24,7 @@ public:
     float getAvgFreq();
     void start();
     void stop();
+    void updatePWM(float offset);
     void setWaveform(Waveform waveform);
 
     static constexpr uint8_t READINGS_MAX = 16; //number of timing readings to take
@@ -39,6 +43,12 @@ public:
     static constexpr uint8_t C5 = 60;
     static constexpr uint8_t NOTE_A4 = 69;
     static constexpr uint8_t C2 = 36;
+
+    //PWM modulation------------------------------------------------
+    float pulseWidth = .5;
+    SW_LFO pwmLFO;
+    SW_DA pwmDA; //delay attack envelope
+    SW_ADSR pwmADSR;
 private:
     //assign bit positions to the components of a waveform
     enum waveformBits { saw_b = 1, pulse1_b = (1 << 1), pulse2_b = (1 << 2), tri_b =(1 << 3), sub_b = (1 << 4), inv_saw_b = (1 << 5) };
@@ -95,4 +105,6 @@ private:
     inline static volatile bool readingsComplete = false; //flag to show buffer has been filled
 
     static void captureISR(); //interrupt service routine
+
+    DigiPot& _pwmPot;
 };

@@ -1,6 +1,6 @@
 #include "voice.h"
 
-Voice::Voice(Dac& vcfCutDac, DigiPot& resPot) : vcf(vcfCutDac, resPot) {
+Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot) : vcf(vcfCutDac, resPot), osc(pwmPot) {
     setGlideRate(.25);
 }
 
@@ -35,6 +35,9 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     osc.setNote(currentGlideNote + (currentBend * bendRange)); //apply bend
     osc.start();
 
+    osc.pwmADSR.gateOn();
+    osc.pwmDA.gateOn();
+
     if (vel > accentThreshold) accentADSR.gateOn();
     vcf.updateCut(currentGlideNote, accentADSR.output * 0.25);
 }
@@ -43,6 +46,7 @@ void Voice::noteOff(uint8_t note, uint8_t vel) {
     gate = false;
     osc.stop();
     //TODO: make array of envelopes to turn off
+    osc.pwmADSR.gateOff();
     accentADSR.gateOff();
 
     if (glideLegato) glideOn = false;
@@ -71,4 +75,9 @@ void Voice::update() {
     accentADSR.step();
     //TODO: add accent envelope > vcf amount control
     vcf.updateCut(osc.currentNote, accentADSR.output * 0.25);
+
+    //TODO: add a function to update all osc modulators?
+    osc.pwmLFO.step();
+    osc.pwmDA.step();
+    osc.updatePWM(0);
 }
