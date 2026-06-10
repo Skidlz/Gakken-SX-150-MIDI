@@ -1,13 +1,30 @@
 #include "modulator.h"
 
-SW_LFO::SW_LFO() {
+SW_LFO::SW_LFO(const char* p)  : prefix(p),
+        rate  { "Rate",  rateFormat, &prefix },
+        depth { "Depth", Param::toPercentStr, &prefix } {
     _waveform = TRIANGLE;
     _phase = 0;
     setRate(.5);
     step();
 }
 
+const char* SW_LFO::rateFormat(char* buffer, size_t len, uint8_t v) {
+    float freq = MIN_HZ * pow(RANGE, v / 127.0);
+
+    char floatBuffer[10]; //buffer for float to string
+    const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
+    dtostrf(freq, 5, decimalPlaces, floatBuffer);
+    snprintf(buffer, len, "%6sHz", floatBuffer); //pad number
+
+    return buffer;
+}
+
 void SW_LFO::step() { //progress by one tick
+    //update using any dirty params
+    if (rate.dirty) setRate(rate.get());
+    if (depth.dirty) scale = depth.get();
+
     _phase += _stepSize;
 
     float tempOut = 0;
@@ -39,7 +56,7 @@ void SW_LFO::gateOn() { //reset LFO
 void SW_LFO::setRate(float rate) { //0-1 rate = .01-100Hz
     float freq = MIN_HZ * pow(RANGE, rate);
 
-    _stepSize = (uint32_t)(MAX / TICK_RATE * freq );
+    _stepSize = (uint32_t) (MAX / TICK_RATE * freq);
 }
 
 void SW_LFO::setWaveform(Waveform waveform) {

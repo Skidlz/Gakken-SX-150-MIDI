@@ -9,7 +9,7 @@
 #include "BD79702.h" //DAC
 #include "modulator.h" //Software modulators
 #include "analogInputs.h"
-#include <functional>
+#include "parameter.h"
 
 constexpr float x = 0.51; //sets the middle of the curve on x-axis
 constexpr float k = 3.8; //sets the curve severity
@@ -67,7 +67,7 @@ void tickClock(timer_callback_args_t *args) { stepFlag = true; }
 MIDI midi;
 void noteOnHandler(uint8_t note, uint8_t vel);
 void noteOffHandler(uint8_t note, uint8_t vel);
-void midiCcHandler(uint8_t cc, uint8_t val);
+void midiCcHandler(uint8_t key, uint8_t ptr);
 
 uint8_t pressedKeys[127]; //hold all currently pressed notes
 //allows us to fall back to previously pressed note after release
@@ -225,16 +225,51 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
     }
 }
 
+//------------------------------------
+struct CCbind { //binds MIDI CC number to Param
+    uint8_t ccNumber;
+    Param& param;
+};
+
+constexpr uint8_t PARAM_COUNT = 4;
+const CCbind ccs[PARAM_COUNT] = {
+    { 5, voice.glideTime },
+    { 15, voice.osc.waveform },
+    { 17, voice.osc.pwmLFO.rate },
+    //TODO: lfo waveform
+    { 19, voice.osc.pwmLFO.depth },
+};
+
 void midiCcHandler(uint8_t cc, uint8_t val) {
+    //find param with this CC number
+    CCbind *result = (CCbind *) bsearch(&cc, ccs, PARAM_COUNT, sizeof(CCbind),
+        [](const void *key, const void *ptr) -> int {
+            int8_t ccNum = *(const uint8_t *) key;
+            const CCbind *ccBind = (const CCbind *) ptr;
+
+            return ccNum - (int8_t)ccBind->ccNumber;
+        }
+    );
+
+    if (result) {
+        result->param.set(val); //store raw value
+
+        //TODO: buffer these strings and rate limit when screen/serial updates
+        char buffer[Param::VAL_BUFFER_LEN] = {};
+        Serial.println(result->param.fullName(buffer, sizeof(buffer)));
+        Serial.println(result->param.toString(buffer, sizeof(buffer)));
+
+        return;
+    }
+
     switch (cc) {
         case 1: //Mod wheel
             lfoToPitchPot.write(val / 127.0);
             break;
 
         case 5: //Portamento Time
-            //voice.setGlideRate(val / 127.0);
-
-            voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
+            voice.setGlideTime(val / 127.0);
+            //voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
             break;
 
         case 6:

@@ -1,5 +1,6 @@
 #pragma once
 #include "Arduino.h"
+#include "parameter.h"
 
 class Modulator {
 public:
@@ -20,7 +21,7 @@ protected: //consts for child classes
 class SW_LFO: public Modulator {
 public:
     enum Waveform { TRIANGLE, SQUARE, SINE, SAW };
-    SW_LFO();
+    SW_LFO(const char* p = "LFO"); //default prefix is LFO
     void step();
     void gateOn();
     void setRate(float rate);
@@ -28,12 +29,19 @@ public:
     float output = 0;
     bool sync = false;
 
+    Param rate;
+    Param depth;
+    //TODO: add params for waveform and reset
+
 private:
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
     static constexpr float MIN_HZ = 0.01f;
     static constexpr float MAX_HZ = 100.0f;
     static constexpr float RANGE = MAX_HZ / MIN_HZ; //precalc LFO range
+
+    const char* prefix;
+    static const char* rateFormat(char* buf, size_t len, uint8_t v);
 
     float _rate = .01;
     uint32_t _stepSize = 1;

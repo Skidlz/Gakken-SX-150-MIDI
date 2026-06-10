@@ -1,19 +1,34 @@
 #include "voice.h"
 
 Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot) : vcf(vcfCutDac, resPot), osc(pwmPot) {
-    setGlideRate(.25);
+    setGlideTime(.25);
 }
 
-void Voice::setGlideRate(float rate) {
-    _glideRate = rate;
-    glideOn = (rate != 0); //turn glide off/on if rate = 0 or not
+void Voice::setGlideTime(float time) {
+    glideOn = (time != 0); //turn glide off/on if rate = 0 or not
+    if (time == 0) return; //don't need to recalc alpha
 
-    rate += 15 / 127.0; //minimum rate = 15
-    rate *= rate; //x^2
+    time += MIN_GLIDE_TM;
+    time *= time; //x^2
 
-    _glideAlpha = 1 / (TICK_RATE * rate / 5); //max of ~3 seconds @ 4kHz
+    constexpr float CHARGE_99 = 4.61;
+    //time in Seconds to 99% = 4.61 / _glideAlpha x TICK_RATE
+    _glideAlpha = CHARGE_99 / (TICK_RATE * time); //max of ~1.25 seconds @ 4kHz
     if (_glideAlpha > 1) _glideAlpha = 1;
     else if (_glideAlpha < 0) _glideAlpha = 0;
+}
+
+const char* Voice::getGlideTime(char* buffer, size_t size, uint8_t value) {
+    if (value == 0) return "Off";
+
+    float time = value / 127.0;
+    time += MIN_GLIDE_TM;
+    time *= time; //x^2
+
+    uint16_t timeInMs = time * 1000;
+    //todo: fix the size
+    snprintf(buffer, 25, "%4d ms", timeInMs); //right aligned
+    return buffer;
 }
 
 void Voice::updateGlide() {
@@ -28,7 +43,7 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     currentNote = _targetNote = note;
 
     //turn glide on if more than one note is pressed
-    if (gate && glideLegato && _glideRate > 0.0) glideOn = true;
+    if (gate && glideLegato && glideTime.value > 0) glideOn = true;
     if (!glideOn) currentGlideNote = note; //jump to note if no glide
     gate = true;
 
@@ -70,6 +85,8 @@ void Voice::setParams(uint8_t cc, uint8_t val) {
 }
 
 void Voice::update() {
+    if (glideTime.dirty) setGlideTime(glideTime.get());
+
     if (gate && glideOn) updateGlide(); //only glide when key(s) held
 
     accentADSR.step();
@@ -80,4 +97,8 @@ void Voice::update() {
     osc.pwmLFO.step();
     osc.pwmDA.step();
     osc.updatePWM(0);
+
+    //update waveform if the CC changed
+    if (osc.waveform.dirty)
+        osc.setWaveform(static_cast<Oscillator::Waveform>(osc.waveform.get() * 20));
 }

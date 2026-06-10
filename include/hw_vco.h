@@ -4,6 +4,7 @@
 #include "modulator.h" //Software modulators
 #include "MCP4251.h" //Digipot
 #include "BD79702.h" //DAC
+#include "parameter.h"
 
 class Oscillator {
 public:
@@ -46,40 +47,50 @@ public:
 
     //PWM modulation------------------------------------------------
     float pulseWidth = .5;
-    SW_LFO pwmLFO;
+    SW_LFO pwmLFO {"PWM LFO"};
     SW_DA pwmDA; //delay attack envelope
     SW_ADSR pwmADSR;
+
+    Param waveform { "Waveform", getWaveformStr };
 private:
     //assign bit positions to the components of a waveform
-    enum waveformBits { saw_b = 1, pulse1_b = (1 << 1), pulse2_b = (1 << 2), tri_b =(1 << 3), sub_b = (1 << 4), inv_saw_b = (1 << 5) };
-    enum waveformFlags { saw = 1, pulse1 = (1 << 1), pulse2 = (1 << 2), tri = saw | (1 << 3), sub = (1 << 4), inv_saw = saw | (1 << 5) };
+    enum waveformBits { saw_b = 1, sqr1_b = (1 << 1), sqr2_b = (1 << 2), tri_b =(1 << 3), sub_b = (1 << 4), inv_saw_b = (1 << 5) };
+    enum waveformFlags { saw = 1, sqr1 = (1 << 1), sqr2 = (1 << 2), tri = saw | (1 << 3), sub = (1 << 4), inv_saw = saw | (1 << 5) };
+
+    struct WaveformDefinition {
+        uint8_t config;
+        const char* name; //string to show on OLED
+    };
+
     //settings that define each waveform
-    static constexpr uint8_t waveformConfig[WAVE_COUNT] = {
-            [SAW] = saw,
-            [PULSE] = pulse1,
-            [TRIANGLE] = tri,
+    static constexpr WaveformDefinition WAVEFORM_TABLE[WAVE_COUNT] = {
+        [SAW]               = { .config = saw,                          .name = "Saw" },
+        [PULSE]             = { .config = sqr1,                         .name = "Pulse" },
+        [TRIANGLE]          = { .config = tri,                          .name = "Triangle" },
 
-            [SUB_SAW] = sub | saw, //octave saw
-            [SUB_PULSE] = sub | pulse1,
-            [SUB_TRI] = sub | tri,
+        [SUB_SAW]           = { .config = sub | saw,                    .name = "Sub + Saw" },
+        [SUB_PULSE]         = { .config = sub | sqr1,                   .name = "Sub + Pulse" },
+        [SUB_TRI]           = { .config = sub | tri,                    .name = "Sub + Tri" },
 
-            [PULSE_SAW] = saw | pulse1,
-            [PULSE_INV_SAW] = inv_saw | pulse1,
-            [PULSE_TRI] = tri | pulse1,
-            [SUB_PULSE_SAW] = sub | saw | pulse1,
-            [SUB_PULSE_INV_SAW] = sub | inv_saw | pulse1,
-            [SUB_PULSE_TRI] = sub |  tri | pulse1,
+        [PULSE_SAW]         = { .config = saw | sqr1,                   .name = "Pulse + Saw" },
+        [PULSE_INV_SAW]     = { .config = inv_saw | sqr1,               .name = "Pulse + Inv Saw" },
+        [PULSE_TRI]         = { .config = tri | sqr1,                   .name = "Pulse + Tri" },
 
-            [SUPER_SAW] = saw | pulse1 | pulse2,
-            [SUPER_INV_SAW] = inv_saw | pulse1 | pulse2,
-            [DOUBLE_PULSE] = pulse1 | pulse2,
-            [SUPER_TRI] = tri | pulse1 | pulse2,
-            [SUB_SUP_SAW] = sub | saw | pulse1 | pulse2,
-            [SUB_SUP_INV_SAW] = sub | inv_saw | pulse1 | pulse2,
-            [SUB_DUB_PULSE] = sub | pulse1 | pulse2, //step saw
-            [SUB_SUP_TRI] = sub | tri | pulse1 | pulse2,
+        [SUB_PULSE_SAW]     = { .config = sub | saw | sqr1,             .name = "Sub + Pulse + Saw" },
+        [SUB_PULSE_INV_SAW] = { .config = sub | inv_saw | sqr1,         .name = "Sub + Pulse + Inv Saw" },
+        [SUB_PULSE_TRI]     = { .config = sub | tri | sqr1,             .name = "Sub + Pulse + Tri" },
 
-            [NO_WAVE] = 0
+        [SUPER_SAW]         = { .config = saw | sqr1 | sqr2,            .name = "Super Saw" },
+        [SUPER_INV_SAW]     = { .config = inv_saw | sqr1 | sqr2,        .name = "Inv Super Saw" },
+        [DOUBLE_PULSE]      = { .config = sqr1 | sqr2,                  .name = "Double Pulse" },
+        [SUPER_TRI]       = { .config = tri | sqr1 | sqr2,              .name = "Super Tri" },
+
+        [SUB_SUP_SAW]       = { .config = sub | saw | sqr1 | sqr2,      .name = "Sub + Sup Saw" },
+        [SUB_SUP_INV_SAW]   = { .config = sub | inv_saw | sqr1 | sqr2,  .name = "Sub + Inv Sup Saw" },
+        [SUB_DUB_PULSE]     = { .config = sub | sqr1 | sqr2,            .name = "Sub + Dub Pulse" },
+        [SUB_SUP_TRI]       = { .config = sub | tri | sqr1 | sqr2,      .name = "Sub + Sup Tri" },
+
+        [NO_WAVE]           = { .config = 0,                            .name = "No Wave" }
     };
 
     Waveform _waveform;
@@ -105,6 +116,8 @@ private:
     inline static volatile bool readingsComplete = false; //flag to show buffer has been filled
 
     static void captureISR(); //interrupt service routine
+
+    static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
 
     DigiPot& _pwmPot;
 };

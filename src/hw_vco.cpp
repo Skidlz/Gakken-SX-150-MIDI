@@ -18,11 +18,11 @@ Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot) {
 //toggles pins to pick waveform
 void Oscillator::setWaveform(Waveform waveform) {
     _waveform = waveform;
-    uint8_t config = waveformConfig[_waveform];
+    uint8_t config = WAVEFORM_TABLE[_waveform].config;
 
     digitalWrite(SAW_SW, !!(config & saw_b));
-    digitalWrite(PUL1_SW, !!(config & pulse1_b));
-    digitalWrite(PUL2_SW, !!(config & pulse2_b));
+    digitalWrite(PUL1_SW, !!(config & sqr1_b));
+    digitalWrite(PUL2_SW, !!(config & sqr2_b));
     digitalWrite(SUB_SW, !!(config & sub_b));
 
     if (config & tri_b) { //put in Hi-z mode to allow Triangle
@@ -160,11 +160,16 @@ void Oscillator::initTimer() { //hardware timer setup
     timerInitialized = true;
 }
 
-
 void Oscillator::updatePWM(float offset) {
-    //DA envelope fade in LFO
+    //DA envelope fades in LFO
     float adjustedLFO = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
     float newPWM = pulseWidth + adjustedLFO + offset;
 
     _pwmPot.write(newPWM / 2); //max
+}
+
+const char* Oscillator::getWaveformStr(char* buffer, size_t size, uint8_t value) {
+    Oscillator::Waveform waveform = static_cast<Oscillator::Waveform>(value * 20 / 127.0);
+    snprintf(buffer, 25, "%21s", WAVEFORM_TABLE[waveform].name); //pad string
+    return buffer;
 }
