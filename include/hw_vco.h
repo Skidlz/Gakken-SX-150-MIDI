@@ -8,7 +8,7 @@
 
 class Oscillator {
 public:
-    enum Waveform { SAW, PULSE, TRIANGLE, SUB_SAW, SUB_PULSE, SUB_TRI,
+    enum Waveform : uint8_t { SAW, PULSE, TRIANGLE, SUB_SAW, SUB_PULSE, SUB_TRI,
         PULSE_SAW, PULSE_INV_SAW, PULSE_TRI,
         SUB_PULSE_SAW, SUB_PULSE_INV_SAW, SUB_PULSE_TRI,
         SUPER_SAW, SUPER_INV_SAW, DOUBLE_PULSE, SUPER_TRI,
@@ -25,6 +25,9 @@ public:
     float getAvgFreq();
     void start();
     void stop();
+    void update(); //steps through all modulators and update outputs
+    void gateOn();
+    void gateOff();
     void updatePWM(float offset);
     void setWaveform(Waveform waveform);
 
@@ -50,6 +53,8 @@ public:
     SW_LFO pwmLFO {"PWM LFO"};
     SW_DA pwmDA; //delay attack envelope
     SW_ADSR pwmADSR;
+
+    Modulator* _modulators[3];
 
     Param waveform { "Waveform", getWaveformStr };
 private:

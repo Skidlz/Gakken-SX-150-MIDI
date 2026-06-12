@@ -24,24 +24,27 @@ struct Param {
         return value / 127.0;
     }
 
-    //TODO: pick how to do size
-
-    const char * toString(char * buffer, size_t size) {
+    const char * toString(char * buffer, size_t size) const {
         return getValueStr(buffer, size, value); //pass value to function
     }
 
     //appends an optional prefix to the params
-    const char* fullName(char* buf, size_t len) const {
+    const char* fullName(char* buf, size_t size) const {
         if (!(prefix && *prefix)) return name;
 
-        snprintf(buf, VAL_BUFFER_LEN, "%s %s", *prefix, name);
+        snprintf(buf, size, "%s %s", *prefix, name);
         return buf;
     }
 
     //static string formatting functions----------------------------
     static const char* toIntStr(char* buffer, size_t size, uint8_t val) {
         std::strcpy(buffer, std::to_string(val).c_str());
-        snprintf(buffer, VAL_BUFFER_LEN, "%4d", val); //pad number
+        snprintf(buffer, size, "%4d", val); //pad number
+        return buffer;
+    }
+
+    static const char* toBoolStr(char* buffer, size_t size, uint8_t val) {
+        std::strncpy(buffer, (val >= 64) ? "  On" : " Off", size);
         return buffer;
     }
 
@@ -49,7 +52,7 @@ struct Param {
         float result = val / 1.27; //0 - 100
         char floatBuffer[10]; //buffer for float to string
         dtostrf(result, 4, 1, floatBuffer);
-        snprintf(buffer, VAL_BUFFER_LEN, "%5s%%", floatBuffer); //pad number
+        snprintf(buffer, size, "%5s%%", floatBuffer); //pad number
         return buffer;
     }
 };

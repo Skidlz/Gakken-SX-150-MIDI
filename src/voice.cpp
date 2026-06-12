@@ -50,8 +50,7 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     osc.setNote(currentGlideNote + (currentBend * bendRange)); //apply bend
     osc.start();
 
-    osc.pwmADSR.gateOn();
-    osc.pwmDA.gateOn();
+    osc.gateOn();
 
     if (vel > accentThreshold) accentADSR.gateOn();
     vcf.updateCut(currentGlideNote, accentADSR.output * 0.25);
@@ -60,9 +59,9 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
 void Voice::noteOff(uint8_t note, uint8_t vel) {
     gate = false;
     osc.stop();
-    //TODO: make array of envelopes to turn off
-    osc.pwmADSR.gateOff();
+
     accentADSR.gateOff();
+    osc.gateOff();
 
     if (glideLegato) glideOn = false;
 }
@@ -74,31 +73,14 @@ void Voice::setPitchBend(int16_t bend) {
     osc.setNote(currentGlideNote + (currentBend * bendRange));
 }
 
-void Voice::setParams(uint8_t cc, uint8_t val) {
-    switch (cc) {
-        case 1:
-
-            break;
-        default:
-            break;
-    }
-}
-
 void Voice::update() {
     if (glideTime.dirty) setGlideTime(glideTime.get());
-
     if (gate && glideOn) updateGlide(); //only glide when key(s) held
 
     accentADSR.step();
+
     //TODO: add accent envelope > vcf amount control
     vcf.updateCut(osc.currentNote, accentADSR.output * 0.25);
 
-    //TODO: add a function to update all osc modulators?
-    osc.pwmLFO.step();
-    osc.pwmDA.step();
-    osc.updatePWM(0);
-
-    //update waveform if the CC changed
-    if (osc.waveform.dirty)
-        osc.setWaveform(static_cast<Oscillator::Waveform>(osc.waveform.get() * 20));
+    osc.update();
 }

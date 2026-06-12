@@ -1,29 +1,25 @@
 #include "modulator.h"
 
-SW_LFO::SW_LFO(const char* p)  : prefix(p),
-        rate  { "Rate",  rateFormat, &prefix },
-        depth { "Depth", Param::toPercentStr, &prefix } {
+SW_LFO::SW_LFO(const char* p) : prefix(p),
+        rate  { "Rate", getRateStr, &prefix },
+        depth { "Depth", Param::toPercentStr, &prefix },
+        waveform { "Waveform", getWaveformStr, &prefix },
+        reset { "Reset", Param::toBoolStr, &prefix } {
+    //TODO: fix Reset readout to show off or phase percentage
+    //idea, don't reset with legato notes
     _waveform = TRIANGLE;
     _phase = 0;
     setRate(.5);
     step();
 }
 
-const char* SW_LFO::rateFormat(char* buffer, size_t len, uint8_t v) {
-    float freq = MIN_HZ * pow(RANGE, v / 127.0);
-
-    char floatBuffer[10]; //buffer for float to string
-    const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
-    dtostrf(freq, 5, decimalPlaces, floatBuffer);
-    snprintf(buffer, len, "%6sHz", floatBuffer); //pad number
-
-    return buffer;
-}
-
 void SW_LFO::step() { //progress by one tick
     //update using any dirty params
     if (rate.dirty) setRate(rate.get());
     if (depth.dirty) scale = depth.get();
+    constexpr float WAVE_SCALE = 127.0 * WAVE_COUNT / 128.0;
+    if (waveform.dirty)
+        setWaveform(static_cast<Waveform>(waveform.get() * WAVE_SCALE));
 
     _phase += _stepSize;
 
@@ -50,7 +46,7 @@ void SW_LFO::step() { //progress by one tick
 }
 
 void SW_LFO::gateOn() { //reset LFO
-    if (sync) _phase = HALF_MAX;
+    if (reset.value) _phase = reset.get() * MAX; //reset control changes reset phase
 }
 
 void SW_LFO::setRate(float rate) { //0-1 rate = .01-100Hz
@@ -59,18 +55,37 @@ void SW_LFO::setRate(float rate) { //0-1 rate = .01-100Hz
     _stepSize = (uint32_t) (MAX / TICK_RATE * freq);
 }
 
+const char* SW_LFO::getRateStr(char* buf, size_t len, uint8_t v) {
+    float freq = MIN_HZ * pow(RANGE, v / 127.0);
+
+    char floatBuffer[10]; //buffer for float to string
+    const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
+    dtostrf(freq, 5, decimalPlaces, floatBuffer);
+    snprintf(buf, len, "%6sHz", floatBuffer); //pad number
+
+    return buf;
+}
+
 void SW_LFO::setWaveform(Waveform waveform) {
     _waveform = waveform;
 }
 
+const char* SW_LFO::getWaveformStr(char* buffer, size_t size, uint8_t value) {
+    snprintf(buffer, 25, "%21s", WaveformNames[value * WAVE_COUNT / 128]); //pad string
+    return buffer;
+}
+
 //Clock--------------------------------------------------------------------------------------------
-SW_CLOCK::SW_CLOCK() {
+SW_CLOCK::SW_CLOCK(const char* p) : prefix(p),
+        rate  { "S/H Rate", getRateStr, &prefix } {
     _phase = 0;
     setRate(.5);
     step();
 }
 
 void SW_CLOCK::step() { //progress by one tick
+    if (rate.dirty) setRate(rate.get());
+
     _phase += _stepSize;
 
     output = !!(_phase > HALF_MAX);
@@ -80,10 +95,23 @@ void SW_CLOCK::gateOn() { //reset LFO
     if (sync) _phase = 0;
 }
 
-void SW_CLOCK::setRate(float rate) { //0-1 rate = .01-100Hz
-    float freq = MIN_HZ * pow(RANGE, rate);
+void SW_CLOCK::setRate(float rate) { //0-1 rate = 200-4Hz
+    float freq = MIN_HZ * pow(RANGE, (1 - rate)); //low val = higher clock
 
     _stepSize = (uint32_t)(MAX / TICK_RATE * freq );
+}
+
+const char* SW_CLOCK::getRateStr(char* buf, size_t len, uint8_t v) {
+    if (!v) return " Off";
+
+    float freq = MIN_HZ * pow(RANGE, (127 - v) / 127.0);
+
+    char floatBuffer[10]; //buffer for float to string
+    const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
+    dtostrf(freq, 5, decimalPlaces, floatBuffer);
+    snprintf(buf, len, "%6sHz", floatBuffer); //pad number
+
+    return buf;
 }
 
 //ADSR---------------------------------------------------------------------------------------------
@@ -124,7 +152,11 @@ void SW_ADSR::setSustain(float sustain) {
     _stages[DECAY].target = sustain;
 }
 
-void SW_ADSR::gateOn() { _currentStage = ATTACK; }
+void SW_ADSR::gateOn() {
+    _currentStage = ATTACK;
+    sampHoldClock.gateOn();
+}
+
 void SW_ADSR::gateOff() { _currentStage = RELEASE; }
 
 void SW_ADSR::step() {
@@ -139,7 +171,7 @@ void SW_ADSR::step() {
         _phase = target; //remove undershoot
     }
 
-    if (!sampleHold) {
+    if (!sampHoldClock.rate.value) { //ignore SH if stopped
         output = _phase * scale + offset;
         return;
     }
@@ -157,9 +189,6 @@ SW_DA::SW_DA() { //delay at 0, expo rise to 1 __..'¯¯¯
     _currentStage = ATTACK;
     scale = 1;
     offset = 0;
-
-    static float curve = 40.35;
-    static float reciprocal = 1 / (curve - 1.0); //precalc reciprocal
 
     //set up the stages
     _stages[DELAY] = { 0.1, 3, 0, 0, .5 };
@@ -204,8 +233,7 @@ void SW_DA::step() {
             break;
         case ATTACK:
             _phase += _stages[ATTACK].alpha;
-            if (_phase >= 1)
-                _currentStage = STALL;
+            if (_phase >= 1) _currentStage = STALL;
 
             output = _phase * _phase; //x^2
             break;

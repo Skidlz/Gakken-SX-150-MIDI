@@ -2,10 +2,13 @@
 #include "Arduino.h"
 #include "parameter.h"
 
+#define CAST_MOD(cls, member) reinterpret_cast<Modulator cls::*>(&cls::member)
+
 class Modulator {
 public:
-    virtual void step();
-    virtual void gateOn();
+    virtual void step() = 0;
+    virtual void gateOn() {};
+    virtual void gateOff() {};
     float output = 0;
     float scale = 1;
     float offset = 0;
@@ -20,20 +23,26 @@ protected: //consts for child classes
 //LFO--------------------------------------------------------------------------
 class SW_LFO: public Modulator {
 public:
-    enum Waveform { TRIANGLE, SQUARE, SINE, SAW };
+    enum Waveform : uint8_t { TRIANGLE, SQUARE, SINE, SAW, WAVE_COUNT };
+
     SW_LFO(const char* p = "LFO"); //default prefix is LFO
-    void step();
-    void gateOn();
+    void step() override;
+    void gateOn() override;
     void setRate(float rate);
     void setWaveform(Waveform waveform);
     float output = 0;
-    bool sync = false;
 
     Param rate;
     Param depth;
-    //TODO: add params for waveform and reset
-
+    Param waveform;
+    Param reset;
 private:
+    static constexpr const char* WaveformNames[] = {
+        [TRIANGLE]  = "Triangle",
+        [SQUARE]    = "Square",
+        [SINE]      = "Sine",
+        [SAW]       = "Saw"
+    };
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
     static constexpr float MIN_HZ = 0.01f;
@@ -41,7 +50,8 @@ private:
     static constexpr float RANGE = MAX_HZ / MIN_HZ; //precalc LFO range
 
     const char* prefix;
-    static const char* rateFormat(char* buf, size_t len, uint8_t v);
+    static const char* getRateStr(char* buf, size_t len, uint8_t v);
+    static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
 
     float _rate = .01;
     uint32_t _stepSize = 1;
@@ -52,19 +62,23 @@ private:
 //Clock-------------------------------------------------------------------------
 class SW_CLOCK: public Modulator {
 public:
-    SW_CLOCK();
-    void step();
-    void gateOn();
+    SW_CLOCK(const char* p);
+    void step() override;
+    void gateOn() override;
     void setRate(float rate);
     bool output = false;
-    bool sync = false;
+    bool sync = true;
 
+    Param rate;
 private:
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
     static constexpr float MIN_HZ = 4.0f;
     static constexpr float MAX_HZ = 200.0f;
     static constexpr float RANGE = MAX_HZ / MIN_HZ; //precalc LFO range
+
+    const char* prefix;
+    static const char* getRateStr(char* buf, size_t len, uint8_t v);
 
     float _rate = 1;
     uint32_t _stepSize = 1;
@@ -78,16 +92,16 @@ public:
     enum Stage { ATTACK, DECAY, RELEASE, SUSTAIN, STAGE_COUNT};
     //enum Mode { ADSR, ASR, AD };
     SW_ADSR();
-    void step();
+    void step() override;
     void setRate(Stage stage, float newRate);
     void setSustain(float sustain);
 
-    void gateOn();
-    void gateOff();
+    void gateOn() override;
+    void gateOff() override;
 
     float output = 0;
 
-    SW_CLOCK sampHoldClock;
+    SW_CLOCK sampHoldClock { "ADSR" }; //TODO add prefix support
     bool sampleHold = false;
 
     float values[STAGE_COUNT];
@@ -116,11 +130,11 @@ public:
     //PWM stages are first, then sustain
     enum Stage { DELAY, ATTACK, STALL };
     SW_DA();
-    void step();
+    void step() override;
     void setRate(Stage stage, float newRate);
 
-    void gateOn();
-    void gateOff();
+    void gateOn() override;
+    void gateOff() override;
 
     float output = 0;
 

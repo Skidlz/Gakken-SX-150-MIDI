@@ -28,8 +28,8 @@ public:
     uint8_t accentThreshold = 100; //velocity must be over this to trigger accent envelope
     float modDepth = 0; //vibrato depth
 
-    float currentNote = osc.NOTE_A4; //current note without any glide, modulation, bend
-    float currentGlideNote = osc.NOTE_A4; //current note without any modulation,bend
+    float currentNote = Oscillator::NOTE_A4; //current note without any glide, modulation, bend
+    float currentGlideNote = Oscillator::NOTE_A4; //current note without any modulation,bend
 
     Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot);
     void setGlideTime(float time);
@@ -37,8 +37,6 @@ public:
     void noteOn(uint8_t note, uint8_t vel);
     void noteOff(uint8_t note, uint8_t vel);
     void setPitchBend(int16_t bend);
-    //void setModDepth(float depth);
-    void setParams(uint8_t cc, uint8_t val);
     void update(); //steps through all modulators and update outputs
 
     Param glideTime { "Glide Time", getGlideTime };

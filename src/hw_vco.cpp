@@ -3,12 +3,15 @@
 
 //Library to control modified hardware oscillator in Gakken SX-150
 
-Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot) {
+Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
+        _modulators { &pwmLFO, &pwmADSR, &pwmDA } {
     currentNote = 0;
     running = false;
     tuneScaling = 1.0;
     tuningOffset = 0;
     //setNote(12);
+
+    pwmADSR.sampleHold = true;
 
     for (uint8_t pin: { GATE_PIN, SAW_SW, SUB_SW, PUL1_SW, PUL2_SW, TRI_SW })
         pinMode(pin, OUTPUT); //init output pins
@@ -163,7 +166,8 @@ void Oscillator::initTimer() { //hardware timer setup
 void Oscillator::updatePWM(float offset) {
     //DA envelope fades in LFO
     float adjustedLFO = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
-    float newPWM = pulseWidth + adjustedLFO + offset;
+    float newPWM = adjustedLFO + offset + pwmADSR.output;
+    //TODO add PWM param
 
     _pwmPot.write(newPWM / 2); //max
 }
@@ -172,4 +176,22 @@ const char* Oscillator::getWaveformStr(char* buffer, size_t size, uint8_t value)
     Oscillator::Waveform waveform = static_cast<Oscillator::Waveform>(value * 20 / 127.0);
     snprintf(buffer, 25, "%21s", WAVEFORM_TABLE[waveform].name); //pad string
     return buffer;
+}
+
+void Oscillator::update() {
+    //update all modulators
+    for (Modulator* m : _modulators) m->step();
+
+    updatePWM(0);
+
+    if (waveform.dirty) //update waveform if the CC changed
+        setWaveform(static_cast<Oscillator::Waveform>(waveform.get() * 20));
+}
+
+void Oscillator::gateOn() {
+    for (Modulator* m : _modulators) m->gateOn();
+}
+
+void Oscillator::gateOff() {
+    for (Modulator* m : _modulators) m->gateOff();
 }
