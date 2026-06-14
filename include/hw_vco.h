@@ -52,7 +52,7 @@ public:
     float pulseWidth = .5;
     SW_LFO pwmLFO {"PWM LFO"};
     SW_DA pwmDA; //delay attack envelope
-    SW_ADSR pwmADSR;
+    SW_ADSR pwmADSR { "PWM Env"};
 
     Modulator* _modulators[3];
 

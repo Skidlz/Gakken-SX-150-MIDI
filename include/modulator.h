@@ -52,6 +52,7 @@ private:
     const char* prefix;
     static const char* getRateStr(char* buf, size_t len, uint8_t v);
     static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
+    static const char* getPhaseStr(char* buffer, size_t size, uint8_t value);
 
     float _rate = .01;
     uint32_t _stepSize = 1;
@@ -91,7 +92,7 @@ public:
     //PWM stages are first, then sustain
     enum Stage { ATTACK, DECAY, RELEASE, SUSTAIN, STAGE_COUNT};
     //enum Mode { ADSR, ASR, AD };
-    SW_ADSR();
+    SW_ADSR(const char* p);
     void step() override;
     void setRate(Stage stage, float newRate);
     void setSustain(float sustain);
@@ -105,6 +106,11 @@ public:
     bool sampleHold = false;
 
     float values[STAGE_COUNT];
+
+    Param attack;
+    Param decay;
+    Param sustain;
+    Param release;
 private:
     struct stage {
         float minPeriod;
@@ -115,6 +121,8 @@ private:
         float rate;
         float target; //value to move towards
     };
+
+    const char* prefix;
 
     static constexpr float MIN_RATE = .0001;
 

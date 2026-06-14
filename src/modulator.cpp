@@ -4,7 +4,7 @@ SW_LFO::SW_LFO(const char* p) : prefix(p),
         rate  { "Rate", getRateStr, &prefix },
         depth { "Depth", Param::toPercentStr, &prefix },
         waveform { "Waveform", getWaveformStr, &prefix },
-        reset { "Reset", Param::toBoolStr, &prefix } {
+        reset { "Reset", getPhaseStr, &prefix } {
     //TODO: fix Reset readout to show off or phase percentage
     //idea, don't reset with legato notes
     _waveform = TRIANGLE;
@@ -75,6 +75,11 @@ const char* SW_LFO::getWaveformStr(char* buffer, size_t size, uint8_t value) {
     return buffer;
 }
 
+//
+const char* SW_LFO::getPhaseStr(char* buffer, size_t size, uint8_t value) {
+    return (!value) ? "  0ff" : Param::toPercentStr(buffer, size, value);
+}
+
 //Clock--------------------------------------------------------------------------------------------
 SW_CLOCK::SW_CLOCK(const char* p) : prefix(p),
         rate  { "S/H Rate", getRateStr, &prefix } {
@@ -115,7 +120,11 @@ const char* SW_CLOCK::getRateStr(char* buf, size_t len, uint8_t v) {
 }
 
 //ADSR---------------------------------------------------------------------------------------------
-SW_ADSR::SW_ADSR() {
+SW_ADSR::SW_ADSR(const char* p) : prefix(p),
+        attack  { "Attack", Param::toPercentStr, &prefix },
+        decay { "Decay", Param::toPercentStr, &prefix },
+        sustain { "Sustain", Param::toPercentStr, &prefix },
+        release { "Release", Param::toPercentStr, &prefix } {
     _phase = 0;
     _currentStage = RELEASE;
     scale = 1;
@@ -161,6 +170,11 @@ void SW_ADSR::gateOff() { _currentStage = RELEASE; }
 
 void SW_ADSR::step() {
     auto& [minPeriod, maxPeriod, range, alpha, rate, target] = _stages[_currentStage];
+
+    if (attack.dirty) setRate(ATTACK, attack.get());
+    if (decay.dirty) setRate(DECAY, decay.get());
+    if (sustain.dirty) setRate(SUSTAIN, sustain.get());
+    if (release.dirty) setRate(RELEASE, release.get());
 
     if (_phase != target) _phase += alpha * (target - _phase);
 

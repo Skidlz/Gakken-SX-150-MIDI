@@ -15,7 +15,8 @@ class Voice {
 public:
     Oscillator osc;
     HW_VCF vcf;
-    SW_ADSR accentADSR;
+    SW_ADSR accentADSR { "Acc Env" };
+    SW_ADSR vcaADSR { "VCA Env" };
 
     bool gate = false;
 

@@ -51,9 +51,6 @@ touchStrip touchStrip;
 
 Voice voice(vcfCutDac, resonancePot, pwmPot);
 
-//Software modulation------------------------------------------------------------------------------
-SW_ADSR vcaADSR;
-
 //timer
 FspTimer tickTimer; //GPT4
 bool stepFlag = false; //modulation tick
@@ -172,9 +169,8 @@ void loop() {
 
         voice.update(); //glide, keytrack, etc
 
-        vcaADSR.step();
         //TODO: remove. testing VCA with LFO output
-        lfoRateDac.write(1 - vcaADSR.output);
+        lfoRateDac.write(1 - voice.vcaADSR.output);
 
         touchStrip.poll();
     }
@@ -198,7 +194,6 @@ void noteOnHandler(uint8_t note, uint8_t vel) {
         pressedKeys[keyCount++] = note;
 
     voice.noteOn(note, vel);
-    vcaADSR.gateOn();
 }
 
 void noteOffHandler(uint8_t note, uint8_t vel) {
@@ -221,7 +216,6 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
         voice.noteOn(pressedKeys[keyCount - 1], vel);
     else {
         voice.noteOff(pressedKeys[keyCount - 1], vel);
-        vcaADSR.gateOff();
     }
 }
 
@@ -231,13 +225,20 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 4;
+constexpr uint8_t PARAM_COUNT = 10;
 const CCbind ccs[PARAM_COUNT] = {
-    { 5, voice.glideTime },
+    //{ 5, voice.glideTime },
+    {9, voice.vcaADSR.attack },
+    {10, voice.vcaADSR.decay },
+    {11, voice.vcaADSR.sustain },
+    {12, voice.vcaADSR.release },
+
     { 15, voice.osc.waveform },
     { 17, voice.osc.pwmLFO.rate },
-    //TODO: lfo waveform
+    { 18, voice.osc.pwmLFO.waveform },
     { 19, voice.osc.pwmLFO.depth },
+    { 20, voice.osc.pwmLFO.reset },
+    { 21, voice.osc.pwmADSR.sampHoldClock.rate },
 };
 
 void midiCcHandler(uint8_t cc, uint8_t val) {
@@ -268,8 +269,8 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
             break;
 
         case 5: //Portamento Time
-            voice.setGlideTime(val / 127.0);
-            //voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
+            //voice.setGlideTime(val / 127.0);
+            voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
             break;
 
         case 6:
@@ -286,22 +287,22 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 
         case 9: //attack
 //            adsr.setRate(HW_adsr::ATTACK, val / 127.0);
-            vcaADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
+            voice.vcaADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
             break;
 
         case 10: //decay Time
 //            adsr.setRate(HW_adsr::DECAY, val / 127.0);
-            vcaADSR.setRate(SW_ADSR::DECAY, val / 127.0);
+            voice.vcaADSR.setRate(SW_ADSR::DECAY, val / 127.0);
             break;
 
         case 11: //sustain level
 //            adsr.setSustain(val/127.0);
-            vcaADSR.setSustain(val / 127.0);
+            voice.vcaADSR.setSustain(val / 127.0);
             break;
 
         case 12: //release time
 //            adsr.setRate(HW_adsr::RELEASE, val / 127.0);
-            vcaADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
+            voice.vcaADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
             break;
 
         case 13: //PWM & super saw adjust

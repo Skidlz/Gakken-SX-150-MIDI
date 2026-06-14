@@ -51,6 +51,7 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     osc.start();
 
     osc.gateOn();
+    vcaADSR.gateOn();
 
     if (vel > accentThreshold) accentADSR.gateOn();
     vcf.updateCut(currentGlideNote, accentADSR.output * 0.25);
@@ -62,6 +63,7 @@ void Voice::noteOff(uint8_t note, uint8_t vel) {
 
     accentADSR.gateOff();
     osc.gateOff();
+    vcaADSR.gateOff();
 
     if (glideLegato) glideOn = false;
 }
@@ -78,6 +80,8 @@ void Voice::update() {
     if (gate && glideOn) updateGlide(); //only glide when key(s) held
 
     accentADSR.step();
+
+    vcaADSR.step();
 
     //TODO: add accent envelope > vcf amount control
     vcf.updateCut(osc.currentNote, accentADSR.output * 0.25);
