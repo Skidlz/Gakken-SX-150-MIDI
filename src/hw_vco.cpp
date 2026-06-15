@@ -11,7 +11,7 @@ Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
     tuningOffset = 0;
     //setNote(12);
 
-    pwmADSR.sampleHold = true;
+    pwm.set(63); //midpoint
 
     for (uint8_t pin: { GATE_PIN, SAW_SW, SUB_SW, PUL1_SW, PUL2_SW, TRI_SW })
         pinMode(pin, OUTPUT); //init output pins
@@ -166,8 +166,7 @@ void Oscillator::initTimer() { //hardware timer setup
 void Oscillator::updatePWM(float offset) {
     //DA envelope fades in LFO
     float adjustedLFO = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
-    float newPWM = adjustedLFO + offset + pwmADSR.output;
-    //TODO add PWM param
+    float newPWM = adjustedLFO + offset + pwmADSR.output + pwm.get();
 
     _pwmPot.write(newPWM / 2); //max
 }

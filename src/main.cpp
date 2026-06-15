@@ -7,7 +7,6 @@
 #include "voice.h"
 #include "MCP4251.h" //Digipot
 #include "BD79702.h" //DAC
-#include "modulator.h" //Software modulators
 #include "analogInputs.h"
 #include "parameter.h"
 
@@ -49,7 +48,7 @@ HW_adsr adsr(D3, D5, D4, sustainDac);
 
 touchStrip touchStrip;
 
-Voice voice(vcfCutDac, resonancePot, pwmPot);
+Voice voice(vcfCutDac, resonancePot, vcfDrivePot, pwmPot, lfoRateDac);
 
 //timer
 FspTimer tickTimer; //GPT4
@@ -225,20 +224,33 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 10;
+constexpr uint8_t PARAM_COUNT = 22;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
-    {9, voice.vcaADSR.attack },
-    {10, voice.vcaADSR.decay },
-    {11, voice.vcaADSR.sustain },
-    {12, voice.vcaADSR.release },
 
+    { 5, voice.osc.pwmADSR.attack },
+    { 6, voice.osc.pwmADSR.decay },
+    { 7, voice.osc.pwmADSR.sustain },
+    { 8, voice.osc.pwmADSR.release },
+    { 9,  voice.vcaADSR.attack },
+    { 10, voice.vcaADSR.decay },
+    { 11, voice.vcaADSR.sustain },
+    { 12, voice.vcaADSR.release },
+    { 13, voice.vcf.drive },
+    { 14, voice.vcf.cutoff },
     { 15, voice.osc.waveform },
+    { 16, voice.osc.pwm },
     { 17, voice.osc.pwmLFO.rate },
     { 18, voice.osc.pwmLFO.waveform },
     { 19, voice.osc.pwmLFO.depth },
     { 20, voice.osc.pwmLFO.reset },
-    { 21, voice.osc.pwmADSR.sampHoldClock.rate },
+    { 21, voice.osc.pwmDA.delay },
+    { 22, voice.osc.pwmDA.attack },
+    { 23, voice.osc.pwmADSR.sampHoldClock.rate },
+    { 24, voice.vcf.keyTracking },
+    { 25, voice.vcfAccAmt },
+
+    { 71, voice.vcf.resonance },
 };
 
 void midiCcHandler(uint8_t cc, uint8_t val) {
@@ -267,134 +279,23 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
         case 1: //Mod wheel
             lfoToPitchPot.write(val / 127.0);
             break;
-
-        case 5: //Portamento Time
-            //voice.setGlideTime(val / 127.0);
-            voice.osc.pwmADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
-            break;
-
-        case 6:
-            voice.osc.pwmADSR.setRate(SW_ADSR::DECAY, val / 127.0);
-            break;
-
-        case 7:
-            voice.osc.pwmADSR.setRate(SW_ADSR::SUSTAIN, val / 127.0);
-            break;
-
-        case 8:
-            voice.osc.pwmADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
-            break;
-
-        case 9: //attack
-//            adsr.setRate(HW_adsr::ATTACK, val / 127.0);
-            voice.vcaADSR.setRate(SW_ADSR::ATTACK, val / 127.0);
-            break;
-
-        case 10: //decay Time
-//            adsr.setRate(HW_adsr::DECAY, val / 127.0);
-            voice.vcaADSR.setRate(SW_ADSR::DECAY, val / 127.0);
-            break;
-
-        case 11: //sustain level
-//            adsr.setSustain(val/127.0);
-            voice.vcaADSR.setSustain(val / 127.0);
-            break;
-
-        case 12: //release time
-//            adsr.setRate(HW_adsr::RELEASE, val / 127.0);
-            voice.vcaADSR.setRate(SW_ADSR::RELEASE, val / 127.0);
-            break;
-
-        case 13: //PWM & super saw adjust
-            //only use half of pot
-//            digiPot1.setWiper(PWM_POT, 255 - val ); //PWM & super saw adjust
-            pwmPot.write(1 - (val / 127.0));
-            break;
-
-        case 14: //VCF Cut
-            voice.vcf.cut = val / 127.0;
-            voice.vcf.updateCut(voice.currentGlideNote, voice.accentADSR.output * 0.25);
-            break;
-
-        case 15: //Waveform select
-            //use the upper 4 bits to select from 16 waveforms
-            voice.osc.setWaveform(static_cast<Oscillator::Waveform>((val * 20) / 127));
-            break;
-
-        case 16: //VCF Drive
-            vcfDrivePot.write(val / 127.0);
-            break;
-
-        case 17: //Soft LFO for PWM
-            voice.osc.pwmLFO.setRate(val / 127.0);
-            break;
-
-        case 18: //Soft LFO waveform
-            voice.osc.pwmLFO.setWaveform(static_cast<SW_LFO::Waveform>((val >> 5) & 0b11));
-            break;
-
-        case 19: //Soft LFO depth
-            voice.osc.pwmLFO.scale = val / 127.0;
-            break;
-
-        case 20: //PWM offset
-            voice.osc.pwmLFO.offset = val / 127.0; //(val * 2 / 127.0) - 1;
-            break;
-
-        case 21:
-            voice.osc.pwmDA.setRate(SW_DA::DELAY, val / 127.0);
-            break;
-
-        case 22:
-            voice.osc.pwmDA.setRate(SW_DA::ATTACK, val / 127.0);
-            break;
-
-        case 23:
-
-            break;
-
-        case 24: { //VCF key tracking
-            voice.vcf.keyTracking = val / 127.0;
-            voice.vcf.updateCut(voice.currentGlideNote, voice.accentADSR.output * 0.25);
-            break;
-        }
-
-        case 25: {
-            //invertSaw = (val >= 64);
-            voice.osc.pwmADSR.sampHoldClock.setRate(val / 127.0);
-            voice.osc.pwmADSR.sampleHold = !!(val);
-            break;
-        }
-
         case 29: //attack
             adsr.setRate(HW_adsr::ATTACK, val / 127.0);
             break;
-
         case 30: //decay Time
             adsr.setRate(HW_adsr::DECAY, val / 127.0);
             break;
-
         case 31: //sustain level
             adsr.setSustain(val/127.0);
             break;
-
         case 32: //release time
             adsr.setRate(HW_adsr::RELEASE, val / 127.0);
             break;
-
-        case 71: //Resonance
-            voice.vcf.updateResonance(val / 127.0);
-            break;
-
         case 72: //LFO rate
             lfoRateDac.write(1 - (val / 127.0));
             break;
-
         case 73: //Env depth
             envToVcfPot.write(val / 127.0); //Env to VCF
-            break;
-
-        default:
             break;
     }
 }

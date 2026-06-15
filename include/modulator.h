@@ -103,7 +103,6 @@ public:
     float output = 0;
 
     SW_CLOCK sampHoldClock { "ADSR" }; //TODO add prefix support
-    bool sampleHold = false;
 
     float values[STAGE_COUNT];
 
@@ -111,6 +110,7 @@ public:
     Param decay;
     Param sustain;
     Param release;
+    //Param depth;
 private:
     struct stage {
         float minPeriod;
@@ -137,7 +137,7 @@ class SW_DA: public Modulator {
 public:
     //PWM stages are first, then sustain
     enum Stage { DELAY, ATTACK, STALL };
-    SW_DA();
+    SW_DA(const char* p);
     void step() override;
     void setRate(Stage stage, float newRate);
 
@@ -147,6 +147,9 @@ public:
     float output = 0;
 
     float values[2];
+
+    Param delay;
+    Param attack;
 private:
     struct stage {
         float minPeriod;
@@ -156,6 +159,8 @@ private:
         float alpha; //step size
         float rate;
     };
+
+    const char* prefix;
 
     static constexpr float MIN_RATE = .0001;
 

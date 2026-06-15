@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include "hw_vco.h"
 #include "hw_vcf.h"
+#include "hw_lfo.h"
 #include "hw_adsr.h"
 #include "modulator.h" //Software modulators
 #include "MCP4251.h" //Digipot
@@ -15,6 +16,7 @@ class Voice {
 public:
     Oscillator osc;
     HW_VCF vcf;
+    HW_LFO lfo;
     SW_ADSR accentADSR { "Acc Env" };
     SW_ADSR vcaADSR { "VCA Env" };
 
@@ -32,7 +34,7 @@ public:
     float currentNote = Oscillator::NOTE_A4; //current note without any glide, modulation, bend
     float currentGlideNote = Oscillator::NOTE_A4; //current note without any modulation,bend
 
-    Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot);
+    Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac);
     void setGlideTime(float time);
     void updateGlide(); //call at TICK_RATE to update glide progress
     void noteOn(uint8_t note, uint8_t vel);
@@ -41,6 +43,7 @@ public:
     void update(); //steps through all modulators and update outputs
 
     Param glideTime { "Glide Time", getGlideTime };
+    Param vcfAccAmt { "VCF Accent" };
 private:
     float _targetNote;
 

@@ -1,6 +1,9 @@
 #include "voice.h"
 
-Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& pwmPot) : vcf(vcfCutDac, resPot), osc(pwmPot) {
+Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac) :
+        vcf(vcfCutDac, resPot, vcfDrivePot),
+        osc(pwmPot),
+        lfo(lfoRateDac) {
     setGlideTime(.25);
 }
 
@@ -26,8 +29,7 @@ const char* Voice::getGlideTime(char* buffer, size_t size, uint8_t value) {
     time *= time; //x^2
 
     uint16_t timeInMs = time * 1000;
-    //todo: fix the size
-    snprintf(buffer, 25, "%4d ms", timeInMs); //right aligned
+    snprintf(buffer, size, "%4d ms", timeInMs); //right aligned
     return buffer;
 }
 
@@ -80,11 +82,9 @@ void Voice::update() {
     if (gate && glideOn) updateGlide(); //only glide when key(s) held
 
     accentADSR.step();
-
     vcaADSR.step();
 
-    //TODO: add accent envelope > vcf amount control
-    vcf.updateCut(osc.currentNote, accentADSR.output * 0.25);
+    vcf.update(currentGlideNote, accentADSR.output * vcfAccAmt.get());
 
     osc.update();
 }

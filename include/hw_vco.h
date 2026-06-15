@@ -51,12 +51,13 @@ public:
     //PWM modulation------------------------------------------------
     float pulseWidth = .5;
     SW_LFO pwmLFO {"PWM LFO"};
-    SW_DA pwmDA; //delay attack envelope
+    SW_DA pwmDA { "PWM LFO "}; //delay attack envelope
     SW_ADSR pwmADSR { "PWM Env"};
 
     Modulator* _modulators[3];
 
     Param waveform { "Waveform", getWaveformStr };
+    Param pwm { "PWM" };
 private:
     //assign bit positions to the components of a waveform
     enum waveformBits { saw_b = 1, sqr1_b = (1 << 1), sqr2_b = (1 << 2), tri_b =(1 << 3), sub_b = (1 << 4), inv_saw_b = (1 << 5) };

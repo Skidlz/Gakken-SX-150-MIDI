@@ -6,7 +6,7 @@
 
 struct Param {
     const char *name;
-    const char * (*getValueStr)(char * buffer, size_t size, uint8_t value);
+    const char * (*getValueStr)(char * buffer, size_t size, uint8_t value) = Param::toPercentStr;
     const char** prefix = nullptr; //points to prefix string (used for Modulators)
 
     uint8_t value{}; //raw 7-bit CC value

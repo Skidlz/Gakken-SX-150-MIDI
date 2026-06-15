@@ -198,7 +198,9 @@ void SW_ADSR::step() {
 }
 
 //Delay Attack-------------------------------------------------------------------------------------
-SW_DA::SW_DA() { //delay at 0, expo rise to 1 __..'¯¯¯
+SW_DA::SW_DA(const char* p) : prefix(p),
+        delay { "Delay", Param::toPercentStr, &prefix },
+        attack  { "Attack", Param::toPercentStr, &prefix } {
     _phase = 0;
     _currentStage = ATTACK;
     scale = 1;
@@ -234,7 +236,10 @@ void SW_DA::gateOn() {
 
 void SW_DA::gateOff() {  }
 
-void SW_DA::step() {
+void SW_DA::step() { //delay at 0, expo rise to 1 __..'¯¯¯
+    if (delay.dirty) setRate(DELAY, delay.get());
+    if (attack.dirty) setRate(ATTACK, attack.get());
+
     switch (_currentStage) {
         case DELAY:
             _phase += _stages[DELAY].alpha;
