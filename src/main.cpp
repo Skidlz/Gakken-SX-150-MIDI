@@ -48,7 +48,7 @@ HW_adsr adsr(D3, D5, D4, sustainDac);
 
 touchStrip touchStrip;
 
-Voice voice(vcfCutDac, resonancePot, vcfDrivePot, pwmPot, lfoRateDac);
+Voice voice(vcfCutDac, resonancePot, vcfDrivePot, pwmPot, lfoRateDac, adsr);
 
 //timer
 FspTimer tickTimer; //GPT4
@@ -224,7 +224,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 22;
+constexpr uint8_t PARAM_COUNT = 27;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
 
@@ -250,7 +250,13 @@ const CCbind ccs[PARAM_COUNT] = {
     { 24, voice.vcf.keyTracking },
     { 25, voice.vcfAccAmt },
 
+    { 29, voice.env.attack },
+    { 30, voice.env.decay },
+    { 31, voice.env.sustain },
+    { 32, voice.env.release },
+
     { 71, voice.vcf.resonance },
+    { 72, voice.lfo.rate },
 };
 
 void midiCcHandler(uint8_t cc, uint8_t val) {
@@ -278,21 +284,6 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
     switch (cc) {
         case 1: //Mod wheel
             lfoToPitchPot.write(val / 127.0);
-            break;
-        case 29: //attack
-            adsr.setRate(HW_adsr::ATTACK, val / 127.0);
-            break;
-        case 30: //decay Time
-            adsr.setRate(HW_adsr::DECAY, val / 127.0);
-            break;
-        case 31: //sustain level
-            adsr.setSustain(val/127.0);
-            break;
-        case 32: //release time
-            adsr.setRate(HW_adsr::RELEASE, val / 127.0);
-            break;
-        case 72: //LFO rate
-            lfoRateDac.write(1 - (val / 127.0));
             break;
         case 73: //Env depth
             envToVcfPot.write(val / 127.0); //Env to VCF

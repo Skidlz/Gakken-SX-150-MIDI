@@ -1,5 +1,12 @@
 #include "hw_adsr.h"
 
+HW_adsr::HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac) : _dac(dac){
+    //set up the stages. Note: pins used must support PWM
+    _stages[ATTACK] = { 58/127.0, 18/127.0, 500000.0, 0, .1, new PWM(atk_pin) };
+    _stages[DECAY] = { 103/127.0, 0, 50000.0, 0, .5, new PWM(dec_pin) };
+    _stages[RELEASE] = { 103/127.0, 0, 50000.0, 0, .5, new PWM(rel_pin) };
+}
+
 void HW_adsr::begin() {
     //_dac->begin();
     setSustain(.5); //default
@@ -18,8 +25,6 @@ void HW_adsr::setRate(Stage stage, float newRate) {
     //get members of specific stage
     auto& [maxVal, offset, curve, reciprocal, rate, timer] = _stages[stage];
 
-    values[stage] = newRate;
-
     float expoVal = 1; //default to fastest
     if (newRate != 0) {
         newRate = 1 - ((newRate + offset) * maxVal); //apply scale and offset
@@ -31,17 +36,15 @@ void HW_adsr::setRate(Stage stage, float newRate) {
 }
 
 void HW_adsr::setSustain(float sustain) {
-    values[SUSTAIN] = sustain;
-
     //only use half the range because env maxes out at 2.5V
     //TODO: fix this in hardware
 
     _dac.write( sustain * 0.5);
 }
 
-HW_adsr::HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac) : _dac(dac){
-    //set up the stages. Note: pins used must support PWM
-    _stages[ATTACK] = { 58/127.0, 18/127.0, 500000.0, 0, .1, new PWM(atk_pin) };
-    _stages[DECAY] = { 103/127.0, 0, 50000.0, 0, .5, new PWM(dec_pin) };
-    _stages[RELEASE] = { 103/127.0, 0, 50000.0, 0, .5, new PWM(rel_pin) };
+void HW_adsr::update() {
+    if (attack.dirty) setRate(ATTACK, attack.get());
+    if (decay.dirty) setRate(DECAY, decay.get());
+    if (sustain.dirty) setSustain(sustain.get());
+    if (release.dirty) setRate(RELEASE, release.get());
 }

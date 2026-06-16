@@ -2,6 +2,7 @@
 
 #include "FspTimer.h"
 #include "pwm_zen.h" //customized PWM library
+#include "parameter.h"
 #include "BD79702.h" //DAC
 
 class HW_adsr {
@@ -14,8 +15,12 @@ public:
     void begin();
     void setRate(Stage stage, float rate);
     void setSustain(float sustain);
+    void update();
 
-    float values[STAGE_COUNT];
+    Param attack { "Attack" };
+    Param decay { "Decay" };
+    Param sustain { "Sustain" };
+    Param release { "Release" };
 private:
     struct stage {
         float maxVal; //scale "CV"

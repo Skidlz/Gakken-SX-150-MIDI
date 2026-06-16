@@ -17,6 +17,7 @@ public:
     Oscillator osc;
     HW_VCF vcf;
     HW_LFO lfo;
+    HW_adsr& env;
     SW_ADSR accentADSR { "Acc Env" };
     SW_ADSR vcaADSR { "VCA Env" };
 
@@ -34,7 +35,7 @@ public:
     float currentNote = Oscillator::NOTE_A4; //current note without any glide, modulation, bend
     float currentGlideNote = Oscillator::NOTE_A4; //current note without any modulation,bend
 
-    Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac);
+    Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac, HW_adsr& adsr);
     void setGlideTime(float time);
     void updateGlide(); //call at TICK_RATE to update glide progress
     void noteOn(uint8_t note, uint8_t vel);

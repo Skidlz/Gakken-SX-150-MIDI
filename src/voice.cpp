@@ -1,9 +1,10 @@
 #include "voice.h"
 
-Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac) :
+Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac, HW_adsr& adsr) :
         vcf(vcfCutDac, resPot, vcfDrivePot),
         osc(pwmPot),
-        lfo(lfoRateDac) {
+        lfo(lfoRateDac),
+        env(adsr) {
     setGlideTime(.25);
 }
 
@@ -84,7 +85,7 @@ void Voice::update() {
     accentADSR.step();
     vcaADSR.step();
 
+    env.update();
     vcf.update(currentGlideNote, accentADSR.output * vcfAccAmt.get());
-
     osc.update();
 }
