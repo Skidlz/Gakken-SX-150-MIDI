@@ -97,11 +97,11 @@ void setup() {
     vcfDrivePot.write(0);
 
     adsr.begin(); //starts PMW timers
+    voice.osc.calibrate(); //call CV calibration routine
 
 //    u8g2.begin(); //start OLED
 //    u8g2.setPowerSave(true); //turn display off
 
-    voice.osc.calibrate(); //call CV calibration routine
     //NVIC_DisableIRQ(AGT0_INT_IRQn);
 
     //log a series of measurements for HF trim adjustment
@@ -126,42 +126,38 @@ void setup() {
     midi.controlChange = midiCcHandler;
     midi.pitchBend = [](int16_t bend) { voice.setPitchBend(bend); };
 
-    //set touchstrips callbacks
+    //set touchstrip callbacks--------------------------------------
+    constexpr float TOUCH_SCALE = 80.0;
+    constexpr float TOUCH_OFFSET = 24;
     touchStrip.pressedCB = [](float reading){
-        float scaledNote = reading * 80 + 24;
+        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
         voice.noteOn(scaledNote, 100);
     };
 
     touchStrip.updatedCB = [](float reading){
-        float scaledNote = reading * 80 + 24;
+        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
         voice.osc.setNote(scaledNote); //play note
     };
 
     touchStrip.releasedCB = [](float reading){
-        float scaledNote = reading * 80 + 24;
+        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
         voice.noteOff(scaledNote, 100);
         voice.osc.setNote(scaledNote); //play note
     };
 }
 
 void loop() {
-    char buffer[30]; //text buffer
+    while (Serial1.available())
+        midi.handleByte(Serial1.read());
 
-    while (Serial1.available()) {
-        char test = Serial1.read();
-
-        //update OLED screen
-//        u8g2.clearBuffer();
+    //update OLED screen
+//    char buffer[30]; //text buffer
+//    u8g2.clearBuffer();
 //
-//        u8g2.setFont(u8g2_font_6x13_tr);
-//        sprintf(buffer, "Byte: %d", test);
-//        u8g2.drawStr(0, 10, buffer);
-//        u8g2.sendBuffer();
-
-        midi.handleByte(test);
-    }
-
-    //---------------------------------------------------------
+//    u8g2.setFont(u8g2_font_6x13_tr);
+//    sprintf(buffer, "Byte: %d", test);
+//    u8g2.drawStr(0, 10, buffer);
+//    u8g2.sendBuffer();
 
     if (stepFlag) { //4kHz
         stepFlag = false;
@@ -213,9 +209,8 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
     //TODO: add note priority options (high, low, last)
     if (keyCount > 0) //fallback to last note
         voice.noteOn(pressedKeys[keyCount - 1], vel);
-    else {
+    else
         voice.noteOff(pressedKeys[keyCount - 1], vel);
-    }
 }
 
 //------------------------------------
@@ -227,7 +222,6 @@ struct CCbind { //binds MIDI CC number to Param
 constexpr uint8_t PARAM_COUNT = 27;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
-
     { 5, voice.osc.pwmADSR.attack },
     { 6, voice.osc.pwmADSR.decay },
     { 7, voice.osc.pwmADSR.sustain },

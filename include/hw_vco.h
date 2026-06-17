@@ -15,7 +15,6 @@ public:
         SUB_SUP_SAW, SUB_SUP_INV_SAW, SUB_DUB_PULSE, SUB_SUP_TRI, NO_WAVE, WAVE_COUNT };
 
     float currentNote;
-    bool running;
 
     Oscillator(DigiPot& pwmPot);
 
@@ -23,8 +22,6 @@ public:
     void calibrate();
     float measureFreq();
     float getAvgFreq();
-    void start();
-    void stop();
     void update(); //steps through all modulators and update outputs
     void gateOn();
     void gateOff();

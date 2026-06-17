@@ -6,7 +6,6 @@
 Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
         _modulators { &pwmLFO, &pwmADSR, &pwmDA } {
     currentNote = 0;
-    running = false;
     tuneScaling = 1.0;
     tuningOffset = 0;
     //setNote(12);
@@ -42,7 +41,6 @@ void Oscillator::calibrate() {
     Waveform waveformBackup = _waveform;
     setWaveform(NO_WAVE); //silence osc for calibration
 
-    start(); //turn osc on
     setNote(C2); //play low note
     delay(100); //let it stabilize
     float lowResult = measureFreq();
@@ -50,7 +48,6 @@ void Oscillator::calibrate() {
     setNote(C5); //play high note
     delay(100); //let it stabilize
     float hiResult = measureFreq();
-    stop(); //turn osc off
 
     setWaveform(waveformBackup); //restore original waveform
 
@@ -70,16 +67,6 @@ void Oscillator::setNote(float note) {
 
     analogWrite(A0, dacValue);
     currentNote = note;
-}
-
-void Oscillator::start() {
-    digitalWrite(GATE_PIN, HIGH);
-    running = true;
-}
-
-void Oscillator::stop() {
-    digitalWrite(GATE_PIN, LOW);
-    running = false;
 }
 
 float Oscillator::measureFreq() { //returns equiv MIDI note
@@ -188,9 +175,14 @@ void Oscillator::update() {
 }
 
 void Oscillator::gateOn() {
+    //TODO: glissando on/off
+    //digitalWrite(GATE_PIN, LOW);
+    //delayMicroseconds(100);
+    digitalWrite(GATE_PIN, HIGH);
     for (Modulator* m : _modulators) m->gateOn();
 }
 
 void Oscillator::gateOff() {
+    digitalWrite(GATE_PIN, LOW);
     for (Modulator* m : _modulators) m->gateOff();
 }

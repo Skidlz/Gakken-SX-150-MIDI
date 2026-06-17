@@ -51,7 +51,6 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     gate = true;
 
     osc.setNote(currentGlideNote + (currentBend * bendRange)); //apply bend
-    osc.start();
 
     osc.gateOn();
     vcaADSR.gateOn();
@@ -62,7 +61,6 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
 
 void Voice::noteOff(uint8_t note, uint8_t vel) {
     gate = false;
-    osc.stop();
 
     accentADSR.gateOff();
     osc.gateOff();
