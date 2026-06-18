@@ -6,6 +6,9 @@ Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwm
         lfo(lfoRateDac),
         env(adsr) {
     setGlideTime(.25);
+
+    env.legato = true;
+    osc.legato = true;
 }
 
 void Voice::setGlideTime(float time) {
@@ -42,21 +45,29 @@ void Voice::updateGlide() {
     osc.setNote(currentGlideNote + (currentBend * bendRange)); //apply bend
 }
 
-void Voice::noteOn(uint8_t note, uint8_t vel) {
+void Voice::updateTargetNote(uint8_t note) {
     currentNote = _targetNote = note;
 
-    //turn glide on if more than one note is pressed
-    if (gate && glideLegato && glideTime.value > 0) glideOn = true;
     if (!glideOn) currentGlideNote = note; //jump to note if no glide
-    gate = true;
 
     osc.setNote(currentGlideNote + (currentBend * bendRange)); //apply bend
+}
 
-    osc.gateOn();
-    vcaADSR.gateOn();
+void Voice::noteOn(uint8_t note, uint8_t vel) {
+    //turn glide on if more than one note is pressed
+    if (gate && glideLegato && glideTime.value > 0) glideOn = true;
+
+    updateTargetNote(note);
+
+    osc.gateOn(gate);
+    env.gateOn(gate);
+    //TODO: add legato setting in the envelope?
+    if (!gate) vcaADSR.gateOn();
 
     if (vel > accentThreshold) accentADSR.gateOn();
     vcf.updateCut(currentGlideNote, accentADSR.output * 0.25);
+
+    gate = true;
 }
 
 void Voice::noteOff(uint8_t note, uint8_t vel) {
@@ -64,7 +75,7 @@ void Voice::noteOff(uint8_t note, uint8_t vel) {
 
     accentADSR.gateOff();
     osc.gateOff();
-    vcaADSR.gateOff();
+    env.gateOff();vcaADSR.gateOff();
 
     if (glideLegato) glideOn = false;
 }

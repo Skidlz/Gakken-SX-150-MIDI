@@ -8,6 +8,7 @@ HW_adsr::HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac) : 
 }
 
 void HW_adsr::begin() {
+    pinMode(GATE_PIN, OUTPUT);
     //_dac->begin();
     setSustain(.5); //default
 
@@ -47,4 +48,19 @@ void HW_adsr::update() {
     if (decay.dirty) setRate(DECAY, decay.get());
     if (sustain.dirty) setSustain(sustain.get());
     if (release.dirty) setRate(RELEASE, release.get());
+}
+
+void HW_adsr::gateOn(bool gate) {
+    if (gate) {
+        if (legato) return; //don't retrigger
+
+        digitalWrite(GATE_PIN, LOW); //force retrigger
+        delayMicroseconds(100);
+    }
+
+    digitalWrite(GATE_PIN, HIGH);
+}
+
+void HW_adsr::gateOff() {
+    digitalWrite(GATE_PIN, LOW);
 }

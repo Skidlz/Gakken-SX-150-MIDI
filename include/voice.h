@@ -22,7 +22,6 @@ public:
     SW_ADSR vcaADSR { "VCA Env" };
 
     bool gate = false;
-
     bool glideOn = false;
     bool glideLegato = true;
     float glideBlend; //blend between fixed-rate and fixed-time portamento
@@ -38,6 +37,7 @@ public:
     Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac, HW_adsr& adsr);
     void setGlideTime(float time);
     void updateGlide(); //call at TICK_RATE to update glide progress
+    void updateTargetNote(uint8_t note);
     void noteOn(uint8_t note, uint8_t vel);
     void noteOff(uint8_t note, uint8_t vel);
     void setPitchBend(int16_t bend);

@@ -188,6 +188,9 @@ void noteOnHandler(uint8_t note, uint8_t vel) {
     if (find(pressedKeys, arrEnd, note) == arrEnd)
         pressedKeys[keyCount++] = note;
 
+    //high and low note priority
+    //auto lowestNote = std::min_element(pressedKeys, pressedKeys + keyCount);
+    //auto highestNote = *std::max_element(pressedKeys, pressedKeys + keyCount);
     voice.noteOn(note, vel);
 }
 
@@ -206,9 +209,10 @@ void noteOffHandler(uint8_t note, uint8_t vel) {
         keyCount--;
     }
 
-    //TODO: add note priority options (high, low, last)
+    //auto lowestNote = std::min_element(pressedKeys, pressedKeys + keyCount);
+    //auto highestNote = *std::max_element(pressedKeys, pressedKeys + keyCount);
     if (keyCount > 0) //fallback to last note
-        voice.noteOn(pressedKeys[keyCount - 1], vel);
+        voice.updateTargetNote(pressedKeys[keyCount - 1]);
     else
         voice.noteOff(pressedKeys[keyCount - 1], vel);
 }
@@ -219,7 +223,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 27;
+constexpr uint8_t PARAM_COUNT = 28;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
     { 5, voice.osc.pwmADSR.attack },
@@ -243,6 +247,7 @@ const CCbind ccs[PARAM_COUNT] = {
     { 23, voice.osc.pwmADSR.sampHoldClock.rate },
     { 24, voice.vcf.keyTracking },
     { 25, voice.vcfAccAmt },
+    { 26, voice.glideTime }, //TODO: put on CC 5
 
     { 29, voice.env.attack },
     { 30, voice.env.decay },

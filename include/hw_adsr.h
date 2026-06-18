@@ -15,7 +15,11 @@ public:
     void begin();
     void setRate(Stage stage, float rate);
     void setSustain(float sustain);
+    void gateOn(bool gate);
+    void gateOff();
     void update();
+
+    bool legato = true;
 
     Param attack { "Attack" };
     Param decay { "Decay" };
@@ -33,6 +37,8 @@ private:
         //uint8_t pin;
         PWM* timer;
     };
+
+    #define GATE_PIN D6 //pin that turns the osc on and off
 
     Dac& _dac; //pointer to external DAC object
     stage _stages[3]; //hold all PWM stages

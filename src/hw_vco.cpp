@@ -5,14 +5,13 @@
 
 Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
         _modulators { &pwmLFO, &pwmADSR, &pwmDA } {
-    currentNote = 0;
     tuneScaling = 1.0;
     tuningOffset = 0;
     //setNote(12);
 
     pwm.set(63); //midpoint
 
-    for (uint8_t pin: { GATE_PIN, SAW_SW, SUB_SW, PUL1_SW, PUL2_SW, TRI_SW })
+    for (uint8_t pin: { SAW_SW, SUB_SW, PUL1_SW, PUL2_SW, TRI_SW })
         pinMode(pin, OUTPUT); //init output pins
     setWaveform(SAW); //default to Saw
 }
@@ -66,7 +65,6 @@ void Oscillator::setNote(float note) {
     if (dacValue > DAC_STEPS) dacValue = DAC_STEPS;
 
     analogWrite(A0, dacValue);
-    currentNote = note;
 }
 
 float Oscillator::measureFreq() { //returns equiv MIDI note
@@ -174,15 +172,16 @@ void Oscillator::update() {
         setWaveform(static_cast<Oscillator::Waveform>(waveform.get() * 20));
 }
 
-void Oscillator::gateOn() {
-    //TODO: glissando on/off
-    //digitalWrite(GATE_PIN, LOW);
-    //delayMicroseconds(100);
-    digitalWrite(GATE_PIN, HIGH);
+void Oscillator::gateOn(bool gate) {
+    if (gate) {
+        if (legato) return; //don't retrigger
+
+        for (Modulator* m : _modulators) m->gateOff();
+    }
+
     for (Modulator* m : _modulators) m->gateOn();
 }
 
 void Oscillator::gateOff() {
-    digitalWrite(GATE_PIN, LOW);
     for (Modulator* m : _modulators) m->gateOff();
 }

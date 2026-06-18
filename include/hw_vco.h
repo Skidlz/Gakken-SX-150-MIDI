@@ -14,44 +14,32 @@ public:
         SUPER_SAW, SUPER_INV_SAW, DOUBLE_PULSE, SUPER_TRI,
         SUB_SUP_SAW, SUB_SUP_INV_SAW, SUB_DUB_PULSE, SUB_SUP_TRI, NO_WAVE, WAVE_COUNT };
 
-    float currentNote;
-
-    Oscillator(DigiPot& pwmPot);
-
-    void setNote(float note);
-    void calibrate();
-    float measureFreq();
-    float getAvgFreq();
-    void update(); //steps through all modulators and update outputs
-    void gateOn();
-    void gateOff();
-    void updatePWM(float offset);
-    void setWaveform(Waveform waveform);
-
-    static constexpr uint8_t READINGS_MAX = 16; //number of timing readings to take
-
-    static void initTimer(); //static method to set up timer once
-
-    //osc limits----------------------------------------------------
-    static constexpr uint8_t LOW_NOTE = 24; //C1
-    static constexpr uint8_t HIGH_NOTE = 108; //C8 7 octaves
-
-    //tuning values-------------------------------------------------
-    float tuneScaling;
-    float tuningOffset;
-
-    //MIDI note
-    static constexpr uint8_t C5 = 60;
-    static constexpr uint8_t NOTE_A4 = 69;
-    static constexpr uint8_t C2 = 36;
-
-    //PWM modulation------------------------------------------------
-    float pulseWidth = .5;
     SW_LFO pwmLFO {"PWM LFO"};
     SW_DA pwmDA { "PWM LFO "}; //delay attack envelope
     SW_ADSR pwmADSR { "PWM Env"};
 
     Modulator* _modulators[3];
+
+    bool legato = true;
+
+    //osc limits----------------------------------------------------
+    static constexpr uint8_t LOW_NOTE = 24; //C1
+    static constexpr uint8_t HIGH_NOTE = 108; //C8 7 octaves
+
+    //MIDI note
+    static constexpr uint8_t C5 = 60, C2 = 36, NOTE_A4 = 69;
+
+    Oscillator(DigiPot& pwmPot);
+    void setNote(float note);
+    void calibrate();
+    float measureFreq();
+    float getAvgFreq();
+    void update(); //steps through all modulators and update outputs
+    void gateOn(bool gate);
+    void gateOff();
+    void updatePWM(float offset);
+    void setWaveform(Waveform waveform);
+    static void initTimer(); //static method to set up timer once
 
     Param waveform { "Waveform", getWaveformStr };
     Param pwm { "PWM" };
@@ -102,17 +90,20 @@ private:
     #define PUL1_SW A3
     #define PUL2_SW A4
     #define TRI_SW A5
-    #define GATE_PIN D6 //pin that turns the osc on and off
     //D7 pin that measures Osc frequency
     #define DAC_STEPS 4095.0 //number of steps in 12-bit DAC
     #define NOTE_RANGE 96 //guess at max note range for DAC
 
+    //tuning values-------------------------------------------------
     static constexpr uint16_t A4tuning = 440;
+    float tuneScaling;
+    float tuningOffset;
 
     //timer values--------------------------------------------------
     //Asynchronous General Purpose Timer interrupt (from vector_data.h)
     static const IRQn_Type IRQn_CCMPA = AGT0_INT_IRQn;
 
+    static constexpr uint8_t READINGS_MAX = 16; //number of timing readings to take
     inline static volatile uint32_t lastDelta = 0;
     inline static volatile uint32_t readingsBuffer[READINGS_MAX] = {}; //store multiple input capture readings
     inline static volatile uint8_t readingsIndex = 0;
