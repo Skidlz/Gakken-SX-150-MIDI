@@ -223,7 +223,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 28;
+constexpr uint8_t PARAM_COUNT = 29;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
     { 5, voice.osc.pwmADSR.attack },
@@ -248,6 +248,7 @@ const CCbind ccs[PARAM_COUNT] = {
     { 24, voice.vcf.keyTracking },
     { 25, voice.vcfAccAmt },
     { 26, voice.glideTime }, //TODO: put on CC 5
+    { 27, voice.osc.pwmLFO.slew },
 
     { 29, voice.env.attack },
     { 30, voice.env.decay },

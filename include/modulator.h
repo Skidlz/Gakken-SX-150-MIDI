@@ -23,12 +23,13 @@ protected: //consts for child classes
 //LFO--------------------------------------------------------------------------
 class SW_LFO: public Modulator {
 public:
-    enum Waveform : uint8_t { TRIANGLE, SQUARE, SINE, SAW, WAVE_COUNT };
+    enum Waveform : uint8_t { TRIANGLE, SQUARE, SINE, SAW, NOISE, WAVE_COUNT };
 
     SW_LFO(const char* p = "LFO"); //default prefix is LFO
     void step() override;
     void gateOn() override;
     void setRate(float rate);
+    void setSlew(float rate);
     void setWaveform(Waveform waveform);
     float output = 0;
 
@@ -36,12 +37,14 @@ public:
     Param depth;
     Param waveform;
     Param reset;
+    Param slew;
 private:
     static constexpr const char* WaveformNames[] = {
         [TRIANGLE]  = "Triangle",
         [SQUARE]    = "Square",
         [SINE]      = "Sine",
-        [SAW]       = "Saw"
+        [SAW]       = "Saw",
+        [NOISE]     = "Noise"
     };
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
@@ -49,8 +52,13 @@ private:
     static constexpr float MAX_HZ = 100.0f;
     static constexpr float RANGE = MAX_HZ / MIN_HZ; //precalc LFO range
 
+    static constexpr float MIN_SLEW = 0.01f;
+    static constexpr float MAX_SLEW = 100.0f;
+    static constexpr float SLEW_RANGE = MAX_SLEW / MIN_SLEW; //precalc slew range
+
     const char* prefix;
-    static const char* getRateStr(char* buf, size_t len, uint8_t v);
+    static const char* getRateStr(char* buffer, size_t size, uint8_t value);
+    static const char* getSlewStr(char* buffer, size_t size, uint8_t value);
     static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
     static const char* getPhaseStr(char* buffer, size_t size, uint8_t value);
 
@@ -58,6 +66,9 @@ private:
     uint32_t _stepSize = 1;
     Waveform _waveform;
     uint32_t _phase = 0;
+    float _slewRate = 0;
+    float _previousValue = 0;
+    float _currentSlewed = 0;
 };
 
 //Clock-------------------------------------------------------------------------

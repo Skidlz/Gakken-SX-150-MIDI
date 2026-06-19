@@ -4,7 +4,8 @@ SW_LFO::SW_LFO(const char* p) : prefix(p),
         rate  { "Rate", getRateStr, &prefix },
         depth { "Depth", Param::toPercentStr, &prefix },
         waveform { "Waveform", getWaveformStr, &prefix },
-        reset { "Reset", getPhaseStr, &prefix } {
+        reset { "Reset", getPhaseStr, &prefix },
+        slew { "Slew Time", getSlewStr, &prefix } {
     //TODO: fix Reset readout to show off or phase percentage
     //idea, don't reset with legato notes
     _waveform = TRIANGLE;
@@ -20,11 +21,11 @@ void SW_LFO::step() { //progress by one tick
     constexpr float WAVE_SCALE = 127.0 * WAVE_COUNT / 128.0;
     if (waveform.dirty)
         setWaveform(static_cast<Waveform>(waveform.get() * WAVE_SCALE));
+    if (slew.dirty) setSlew(slew.get());
 
     _phase += _stepSize;
 
     float tempOut = 0;
-
     switch (_waveform) {
         case TRIANGLE:
             tempOut = (_phase < HALF_MAX) ? (float)_phase / HALF_MAX : (float)(MAX - _phase) / HALF_MAX;
@@ -38,11 +39,19 @@ void SW_LFO::step() { //progress by one tick
         case SINE:
             tempOut = sin(2.0 * M_PI * (float)_phase / MAX) / 2 + .5;
             break;
+        case NOISE:
+            if (_phase > HALF_MAX && _phase - _stepSize < HALF_MAX)
+                _previousValue = random() / (float) RAND_MAX;
+            tempOut = _previousValue;
+            break;
     }
 
-    //+- 1 when scale = 1, offset = 0
-//    output = (tempOut * 2 * scale) - 1 + offset; //scale and offset
-    output = (tempOut * 2) - 1;
+    //slew rate limit
+    if (slew.value > 0 && abs(tempOut - _currentSlewed) > _slewRate)
+        _currentSlewed += _slewRate * ((tempOut > _currentSlewed) ? 1 : -1);
+    else _currentSlewed = tempOut;
+
+    output = (_currentSlewed * 2) - 1; //±1
 }
 
 void SW_LFO::gateOn() { //reset LFO
@@ -50,20 +59,43 @@ void SW_LFO::gateOn() { //reset LFO
 }
 
 void SW_LFO::setRate(float rate) { //0-1 rate = .01-100Hz
-    float freq = MIN_HZ * pow(RANGE, rate);
-
+    float freq = MIN_HZ * powf(RANGE, rate);
     _stepSize = (uint32_t) (MAX / TICK_RATE * freq);
 }
 
-const char* SW_LFO::getRateStr(char* buf, size_t len, uint8_t v) {
-    float freq = MIN_HZ * pow(RANGE, v / 127.0);
+void SW_LFO::setSlew(float rate) { //0-1 rate = 50-.01Hz
+    float freq = MIN_SLEW * powf(SLEW_RANGE, 1 - rate);
+    _slewRate = freq / TICK_RATE;
+}
+
+const char* SW_LFO::getRateStr(char* buffer, size_t size, uint8_t value) {
+    float freq = MIN_HZ * powf(RANGE, value / 127.0);
 
     char floatBuffer[10]; //buffer for float to string
     const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
     dtostrf(freq, 5, decimalPlaces, floatBuffer);
-    snprintf(buf, len, "%6sHz", floatBuffer); //pad number
+    snprintf(buffer, size, "%6sHz", floatBuffer); //pad number
 
-    return buf;
+    return buffer;
+}
+
+const char* SW_LFO::getSlewStr(char* buffer, size_t size, uint8_t value) {
+    if (value == 0) return "Off";
+
+    float freq = MIN_SLEW * powf(SLEW_RANGE, 1 - (value / 127.0));
+
+    char floatBuffer[10]; //buffer for float to string
+    float timeInS = 1 / freq;
+    if (timeInS < 1) {
+        uint16_t timeInMs = timeInS * 1000;
+        snprintf(buffer, size, "%6d ms", timeInMs); //pad number
+    } else {
+        const uint8_t decimalPlaces = (timeInS < 10) ? 3 : (timeInS < 100) ? 2 : 1;
+        dtostrf(timeInS, 5, decimalPlaces, floatBuffer);
+        snprintf(buffer, size, "%6s s", floatBuffer); //pad number
+    }
+
+    return buffer;
 }
 
 void SW_LFO::setWaveform(Waveform waveform) {
@@ -101,7 +133,7 @@ void SW_CLOCK::gateOn() { //reset LFO
 }
 
 void SW_CLOCK::setRate(float rate) { //0-1 rate = 200-4Hz
-    float freq = MIN_HZ * pow(RANGE, (1 - rate)); //low val = higher clock
+    float freq = MIN_HZ * powf(RANGE, (1 - rate)); //low val = higher clock
 
     _stepSize = (uint32_t)(MAX / TICK_RATE * freq );
 }
@@ -109,7 +141,7 @@ void SW_CLOCK::setRate(float rate) { //0-1 rate = 200-4Hz
 const char* SW_CLOCK::getRateStr(char* buf, size_t len, uint8_t v) {
     if (!v) return " Off";
 
-    float freq = MIN_HZ * pow(RANGE, (127 - v) / 127.0);
+    float freq = MIN_HZ * powf(RANGE, (127 - v) / 127.0);
 
     char floatBuffer[10]; //buffer for float to string
     const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
@@ -150,7 +182,7 @@ void SW_ADSR::setRate(Stage stage, float newRate) {
     //get members of specific stage
     auto& [minPeriod, maxPeriod, range, alpha, rate, target] = _stages[stage];
     rate = newRate;
-    float period = (newRate == 0) ? MIN_RATE : (minPeriod * pow(range, rate)); //exponentiate period range
+    float period = (newRate == 0) ? MIN_RATE : (minPeriod * powf(range, rate)); //exponentiate period range
     if (period == 0) period = MIN_RATE; //avoid divide by zero
 
     alpha = 1 - exp(- (TICK_RATE_INV / period));
@@ -223,7 +255,7 @@ void SW_DA::setRate(Stage stage, float newRate) {
     //get members of specific stage
     auto& [minPeriod, maxPeriod, range, alpha, rate] = _stages[stage];
     rate = newRate;
-    float period = (newRate == 0) ? MIN_RATE : (minPeriod * pow(range, rate)); //exponentiate period range
+    float period = (newRate == 0) ? MIN_RATE : (minPeriod * powf(range, rate)); //exponentiate period range
     if (period == 0) period = MIN_RATE; //avoid divide by zero
 
     alpha = 1 - exp(- (TICK_RATE_INV / period));
