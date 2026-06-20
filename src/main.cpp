@@ -2,13 +2,13 @@
 //#include <U8g2lib.h>
 #include "FspTimer.h"
 #include "midi.h"
-#include "hw_vco.h"
 #include "hw_adsr.h"
 #include "voice.h"
 #include "MCP4251.h" //Digipot
 #include "BD79702.h" //DAC
 #include "analogInputs.h"
 #include "parameter.h"
+#include "noteAssigner.h"
 
 constexpr float x = 0.51; //sets the middle of the curve on x-axis
 constexpr float k = 3.8; //sets the curve severity
@@ -61,13 +61,7 @@ void tickClock(timer_callback_args_t *args) { stepFlag = true; }
 
 //MIDI callbacks-----------------------------------------------------
 MIDI midi;
-void noteOnHandler(uint8_t note, uint8_t vel);
-void noteOffHandler(uint8_t note, uint8_t vel);
 void midiCcHandler(uint8_t key, uint8_t ptr);
-
-uint8_t pressedKeys[127]; //hold all currently pressed notes
-//allows us to fall back to previously pressed note after release
-uint8_t keyCount = 0;
 
 void setup() {
     Serial1.begin(31250); //MIDI baud
@@ -121,28 +115,24 @@ void setup() {
     tickTimer.start();
 
     //MIDI callbacks
-    midi.noteOn = noteOnHandler;
-    midi.noteOff = noteOffHandler;
+    midi.noteOn = NoteAssigner::noteOnHandler;
+    midi.noteOff = NoteAssigner::noteOffHandler;
     midi.controlChange = midiCcHandler;
     midi.pitchBend = [](int16_t bend) { voice.setPitchBend(bend); };
 
     //set touchstrip callbacks--------------------------------------
-    constexpr float TOUCH_SCALE = 80.0;
-    constexpr float TOUCH_OFFSET = 24;
     touchStrip.pressedCB = [](float reading){
-        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
-        voice.noteOn(scaledNote, 100);
+        voice.noteOn(touchStrip::scaleNote(reading), 100);
     };
 
     touchStrip.updatedCB = [](float reading){
-        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
-        voice.osc.setNote(scaledNote); //play note
+        voice.osc.setNote(touchStrip::scaleNote(reading)); //play note
     };
 
     touchStrip.releasedCB = [](float reading){
-        float scaledNote = reading * TOUCH_SCALE + TOUCH_OFFSET;
+        float scaledNote = touchStrip::scaleNote(reading);
         voice.noteOff(scaledNote, 100);
-        voice.osc.setNote(scaledNote); //play note
+        voice.osc.setNote(scaledNote);
     };
 }
 
@@ -163,58 +153,13 @@ void loop() {
         stepFlag = false;
 
         voice.update(); //glide, keytrack, etc
+        touchStrip.poll();
 
         //TODO: remove. testing VCA with LFO output
         lfoRateDac.write(1 - voice.vcaADSR.output);
 
-        touchStrip.poll();
+        NoteAssigner::update();
     }
-}
-
-//find item in array
-uint8_t *find(uint8_t *first, uint8_t *last, uint8_t value) {
-    for (; first != last; first++) if (*first == value) return first;
-
-    return last;
-}
-
-void noteOnHandler(uint8_t note, uint8_t vel) {
-    //if (note < osc.LOW_NOTE || note > (osc.LOW_NOTE + 48)) return; //invalid note
-
-    //if (note > osc.LOW_NOTE) note -= osc.LOW_NOTE;
-
-    //put key into array if it's not there already
-    uint8_t *arrEnd = pressedKeys + keyCount + 1;
-    if (find(pressedKeys, arrEnd, note) == arrEnd)
-        pressedKeys[keyCount++] = note;
-
-    //high and low note priority
-    //auto lowestNote = std::min_element(pressedKeys, pressedKeys + keyCount);
-    //auto highestNote = *std::max_element(pressedKeys, pressedKeys + keyCount);
-    voice.noteOn(note, vel);
-}
-
-void noteOffHandler(uint8_t note, uint8_t vel) {
-    //if (note < osc.LOW_NOTE || note > (osc.LOW_NOTE + 48)) return; //invalid note
-
-    //note -= osc.LOW_NOTE;
-
-    //remove key from array if it's there
-    uint8_t *arrEnd = pressedKeys + keyCount + 1;
-    uint8_t *keyPtr = find(pressedKeys, arrEnd, note);
-    if (keyPtr != arrEnd) { //found
-        for (; keyPtr < arrEnd; keyPtr++) //fill in hole
-            *keyPtr = *(keyPtr + 1);
-
-        keyCount--;
-    }
-
-    //auto lowestNote = std::min_element(pressedKeys, pressedKeys + keyCount);
-    //auto highestNote = *std::max_element(pressedKeys, pressedKeys + keyCount);
-    if (keyCount > 0) //fallback to last note
-        voice.updateTargetNote(pressedKeys[keyCount - 1]);
-    else
-        voice.noteOff(pressedKeys[keyCount - 1], vel);
 }
 
 //------------------------------------
@@ -223,7 +168,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 29;
+constexpr uint8_t PARAM_COUNT = 32;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
     { 5, voice.osc.pwmADSR.attack },
@@ -245,18 +190,20 @@ const CCbind ccs[PARAM_COUNT] = {
     { 21, voice.osc.pwmDA.delay },
     { 22, voice.osc.pwmDA.attack },
     { 23, voice.osc.pwmADSR.sampHoldClock.rate },
-    { 24, voice.vcf.keyTracking },
-    { 25, voice.vcfAccAmt },
-    { 26, voice.glideTime }, //TODO: put on CC 5
-    { 27, voice.osc.pwmLFO.slew },
-
-    { 29, voice.env.attack },
-    { 30, voice.env.decay },
-    { 31, voice.env.sustain },
-    { 32, voice.env.release },
+    { 24, voice.osc.pwmLFO.slew },
+    { 25, voice.vcf.keyTracking },
+    { 26, voice.vcfAccAmt },
+    { 27, voice.glideTime }, //TODO: put on CC 5
+    { 28, voice.env.attack },
+    { 29, voice.env.decay },
+    { 30, voice.env.sustain },
+    { 31, voice.env.release },
+    { 32, voice.lfo.rate },
+    { 33, voice.lfo.waveform },
+    { 34, voice.lfo.reset },
 
     { 71, voice.vcf.resonance },
-    { 72, voice.lfo.rate },
+    { 72, NoteAssigner::notePriority },
 };
 
 void midiCcHandler(uint8_t cc, uint8_t val) {
@@ -292,12 +239,10 @@ void midiCcHandler(uint8_t cc, uint8_t val) {
 }
 
 //expo approximations
-
-//            const float q = 64.0;
-//            const float expoApprox = (!val) ? 100 : (normVal / (q + (1 - q) * normVal)) * 100;
+//    const float q = 64.0;
+//    const float expoApprox = (!val) ? 100 : (normVal / (q + (1 - q) * normVal)) * 100;
 
 //power law
-//            const float w = 1 - (1/50); //0.996;
-//            const float q = 10.7; //8.8;
-//            float expoApprox = normVal - (w * (normVal - pow(normVal, q)));
-//-----------------------------------------------------------------------------------
+//    const float w = 1 - (1/50); //0.996;
+//    const float q = 10.7; //8.8;
+//    float expoApprox = normVal - (w * (normVal - pow(normVal, q)));

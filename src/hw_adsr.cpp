@@ -55,7 +55,7 @@ void HW_adsr::gateOn(bool gate) {
         if (legato) return; //don't retrigger
 
         digitalWrite(GATE_PIN, LOW); //force retrigger
-        delayMicroseconds(100);
+        delayMicroseconds(10);
     }
 
     digitalWrite(GATE_PIN, HIGH);
