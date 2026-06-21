@@ -13,13 +13,12 @@ Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
 
     for (uint8_t pin: { SAW_SW, SUB_SW, PUL1_SW, PUL2_SW, TRI_SW })
         pinMode(pin, OUTPUT); //init output pins
-    setWaveform(SAW); //default to Saw
+    _waveform.value = SAW; //default to Saw
 }
 
 //toggles pins to pick waveform
-void Oscillator::setWaveform(Waveform waveform) {
-    _waveform = waveform;
-    uint8_t config = WAVEFORM_TABLE[_waveform].config;
+void Oscillator::setWaveformHW(Waveform waveform) {
+    uint8_t config = waveformDefinitions[waveform];
 
     digitalWrite(SAW_SW, !!(config & saw_b));
     digitalWrite(PUL1_SW, !!(config & sqr1_b));
@@ -37,8 +36,7 @@ void Oscillator::setWaveform(Waveform waveform) {
 
 //measures oscillator and sets tuning variabels to compensate
 void Oscillator::calibrate() {
-    Waveform waveformBackup = _waveform;
-    setWaveform(NO_WAVE); //silence osc for calibration
+    setWaveformHW(NO_WAVE); //silence osc for calibration
 
     setNote(C2); //play low note
     delay(100); //let it stabilize
@@ -48,7 +46,7 @@ void Oscillator::calibrate() {
     delay(100); //let it stabilize
     float hiResult = measureFreq();
 
-    setWaveform(waveformBackup); //restore original waveform
+    setWaveformHW(_waveform.value); //restore original waveform
 
     //slope = rise over run: (y2 - y1) / (x2 - x1)
     tuneScaling = (hiResult - lowResult) / (C5 - C2);
@@ -148,28 +146,21 @@ void Oscillator::initTimer() { //hardware timer setup
     timerInitialized = true;
 }
 
-void Oscillator::updatePWM(float offset) {
-    //DA envelope fades in LFO
-    float adjustedLFO = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
-    float newPWM = adjustedLFO + offset + pwmADSR.output + pwm.get();
-
-    _pwmPot.write(newPWM / 2); //max
-}
-
-const char* Oscillator::getWaveformStr(char* buffer, size_t size, uint8_t value) {
-    Oscillator::Waveform waveform = static_cast<Oscillator::Waveform>(value * 20 / 127.0);
-    snprintf(buffer, 25, "%21s", WAVEFORM_TABLE[waveform].name); //pad string
-    return buffer;
+void Oscillator::setPWMhw(float newValue) {
+    _pwmPot.write(newValue / 2); //duty cycle only needs to go from 0-50%
 }
 
 void Oscillator::update() {
     //update all modulators
     for (Modulator* m : _modulators) m->step();
 
-    updatePWM(0);
+    //calc PWM modulation. DA envelope fades in LFO
+    float scaledPWMlfo = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
+    pwm.setMod(pwmADSR.output + scaledPWMlfo);
+    if (_pwm.update(pwm)) setPWMhw(_pwm.value);
 
-    if (waveform.dirty) //update waveform if the CC changed
-        setWaveform(static_cast<Oscillator::Waveform>(waveform.get() * 20));
+    //change the hardware if the waveform changed
+    if (_waveform.update(waveform)) setWaveformHW(_waveform.value);
 }
 
 void Oscillator::gateOn(bool gate) {

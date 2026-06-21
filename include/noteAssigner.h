@@ -1,5 +1,6 @@
 #pragma once
 #include "voice.h"
+#include "parameter.h"
 
 extern Voice voice;
 
@@ -8,10 +9,10 @@ namespace NoteAssigner {
 
     extern uint8_t pressedKeys[127]; //hold all currently pressed notes
     extern uint8_t keyCount;
-    extern NotePriority notePri;
     extern Param notePriority;
     extern const char*  NotePriorityNames[];
 
+    extern EnumParam<NotePriority, PRIORITY_COUNT, NotePriorityNames, 10> _notePriority;
 
     const char* getPriorityStr(char* buffer, size_t size, uint8_t value);
     uint8_t getPriorityNote(uint8_t note);

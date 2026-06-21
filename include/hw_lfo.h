@@ -13,24 +13,21 @@ public:
     void gateOn(bool gate);
     void gateOff();
     void update();
-    void setResetMode(Reset newMode);
-    void setWaveform(Waveform waveform);
+    void setWaveformHW(Waveform waveform);
     //TODO: figure out approximate LFO rates
     static const char* getRateStr(char* buffer, size_t size, uint8_t value);
-    static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
-    static const char* getResetStr(char* buffer, size_t size, uint8_t value);
 
-    Param waveform { "LFO Waveform", getWaveformStr };
+    Param waveform { "LFO Waveform", _waveform.getStr };
     Param rate { "LFO Rate", getRateStr };
-    Param reset { "LFO Reset", getResetStr };
+    Param resetMode { "LFO Reset", _resetMode.getStr };
 private:
-    Reset _resetMode = FREE_RUN;
     #define RESET_PIN D2
 
-    static constexpr float WAVE_SCALE = 127.0 * WAVE_COUNT / 128.0;
-    static constexpr float RESET_SCALE = 127.0 * RESET_COUNT / 128.0;
     static constexpr const char* WaveformNames[] = { [TRIANGLE] = "Triangle", [SQUARE] = "Square" };
     static constexpr const char* ResetModes[] = { [FREE_RUN] = "Free Running", [SYNC] = "Sync", [LEGATO] = "Legato" };
+
+    EnumParam<Waveform, WAVE_COUNT, WaveformNames, 9> _waveform;
+    EnumParam<Reset, RESET_COUNT, ResetModes, 13> _resetMode;
 
     static constexpr float MIN_HZ = 0.01f;
     static constexpr float MAX_HZ = 400.0f;

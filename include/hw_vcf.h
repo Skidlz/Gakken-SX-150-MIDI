@@ -7,23 +7,27 @@
 
 class HW_VCF {
 public:
-    enum Mode { LO_PASS, HI_PASS };
-
-    Mode mode = LO_PASS;
+    enum Mode { LO_PASS, HI_PASS, MODE_COUNT };
 
     HW_VCF(Dac& cutoffDac, DigiPot& resonancePot, DigiPot& drivePot) :
         _cutoffDac(cutoffDac),
         _resonancePot(resonancePot),
         _drivePot(drivePot) {}
-    void updateCut(float currentNote, float offset);
-    void update(float currentGlideNote, float offset);
-    void setMode(Mode newMode);
+    void updateCutHW(float newCut);
+    void update();
+    void setModeHW(Mode newMode);
 
     Param cutoff { "Cutoff" };
     Param resonance { "Resonance" };
     Param keyTracking { "Key Track" };
-    Param drive { "Drive" };
+    Param drive { "VCF Drive" };
+    Param mode { "VCF Mode", _mode.getStr };
 private:
+    static constexpr const char* modeNames[] = { [LO_PASS] = "Low Pass", [HI_PASS] = "High Pass" };
+    EnumParam<Mode, MODE_COUNT, modeNames, 10> _mode;
+
+    FloatParam _cutoff;
+
     Dac& _cutoffDac;
     DigiPot& _resonancePot;
     DigiPot& _drivePot;

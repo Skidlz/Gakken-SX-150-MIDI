@@ -46,6 +46,10 @@ private:
         [SAW]       = "Saw",
         [NOISE]     = "Noise"
     };
+
+    //make helper struct for Enum Params. Makes string function, converts/stores enum
+    EnumParam<Waveform, WAVE_COUNT, WaveformNames, 9> _waveform;
+
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
     static constexpr float MIN_HZ = 0.01f;
@@ -64,7 +68,6 @@ private:
 
     float _rate = .01;
     uint32_t _stepSize = 1;
-    Waveform _waveform;
     uint32_t _phase = 0;
     float _slewRate = 0;
     float _previousValue = 0;

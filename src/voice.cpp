@@ -9,6 +9,9 @@ Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwm
 
     env.legato = true;
     osc.legato = true;
+    accentADSR.setRate(SW_ADSR::ATTACK, .3);
+    accentADSR.setRate(SW_ADSR::DECAY, .4);
+    accentADSR.setSustain(0);
 }
 
 void Voice::setGlideTime(float time) {
@@ -65,7 +68,6 @@ void Voice::noteOn(uint8_t note, uint8_t vel) {
     if (!gate) vcaADSR.gateOn();
 
     if (vel > accentThreshold) accentADSR.gateOn();
-    vcf.updateCut(currentGlideNote, accentADSR.output * 0.25);
 
     gate = true;
 }
@@ -95,6 +97,9 @@ void Voice::update() {
     vcaADSR.step();
 
     env.update();
-    vcf.update(currentGlideNote, accentADSR.output * vcfAccAmt.get());
+
+    float keytrackOffset = (vcf.keyTracking.value != 0) ? (currentNote / 127.0) * vcf.keyTracking.get() : 0.0;
+    vcf.cutoff.setMod(accentADSR.output * vcfAccAmt.get() + keytrackOffset);
+    vcf.update();
     osc.update();
 }

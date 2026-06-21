@@ -1,26 +1,20 @@
 #include "noteAssigner.h"
 
-
 namespace NoteAssigner {
     uint8_t pressedKeys[127] = {0}; //hold all currently pressed notes
     //allows us to fall back to previously pressed note after release
     uint8_t keyCount = 0;
-    NotePriority notePri = LAST_NOTE;
+    EnumParam<NotePriority, PRIORITY_COUNT, NotePriorityNames, 10> _notePriority;
 
     const char*  NotePriorityNames[] = { [LAST_NOTE] = "Last Note", [LOW_NOTE] = "Low Note", [HIGH_NOTE] = "High Note" };
 
-    Param notePriority { "Note Priority", getPriorityStr };
-
-    const char* getPriorityStr(char* buffer, size_t size, uint8_t value) {
-        snprintf(buffer, size, "%10s", NotePriorityNames[value * PRIORITY_COUNT / 128]); //pad string
-        return buffer;
-    }
+    Param notePriority { "Note Priority", _notePriority.getStr };
 
     uint8_t getPriorityNote(uint8_t note) {
-        if (notePri == LAST_NOTE) return note;
-        else if (notePri == LOW_NOTE)
+        if (_notePriority.value == LAST_NOTE) return note;
+        else if (_notePriority.value == LOW_NOTE)
             return *std::min_element(pressedKeys, pressedKeys + keyCount);
-        else if (notePri == HIGH_NOTE)
+        else if (_notePriority.value == HIGH_NOTE)
             return *std::max_element(pressedKeys, pressedKeys + keyCount);
 
         return note;
@@ -68,7 +62,6 @@ namespace NoteAssigner {
     }
 
     void update() {
-        constexpr float PRI_SCALE = 127.0 * PRIORITY_COUNT / 128.0;
-        if (notePriority.dirty) notePri = static_cast<NotePriority>(notePriority.get() * PRI_SCALE);
+        _notePriority.update(notePriority);
     }
 }

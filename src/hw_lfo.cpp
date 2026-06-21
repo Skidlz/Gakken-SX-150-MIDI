@@ -6,15 +6,11 @@ HW_LFO::HW_LFO(Dac& rateDac) : _rateDac(rateDac) {
 
 void HW_LFO::update() {
     if (rate.dirty) _rateDac.write(rate.get());
-    if (waveform.dirty) setWaveform(static_cast<Waveform>(waveform.get() * WAVE_SCALE));
-    if (reset.dirty) setResetMode(static_cast<Reset>(reset.get() * RESET_SCALE));
+    if (_waveform.update(waveform)) setWaveformHW(_waveform.value);
+    _resetMode.update(resetMode);
 }
 
-void HW_LFO::setResetMode(Reset newMode){
-    _resetMode = newMode;
-}
-
-void HW_LFO::setWaveform(Waveform waveform){
+void HW_LFO::setWaveformHW(Waveform waveform){
     //TODO: set waveform pin
 }
 
@@ -30,22 +26,12 @@ const char* HW_LFO::getRateStr(char* buffer, size_t size, uint8_t value) {
     return buffer;
 }
 
-const char* HW_LFO::getWaveformStr(char* buffer, size_t size, uint8_t value) {
-    snprintf(buffer, size, "%10s", WaveformNames[value * WAVE_COUNT / 128]); //pad string
-    return buffer;
-}
-
-const char* HW_LFO::getResetStr(char* buffer, size_t size, uint8_t value) {
-    snprintf(buffer, size, "%13s", ResetModes[value * RESET_COUNT / 128]); //pad string
-    return buffer;
-}
-
 //TODO: test
 void HW_LFO::gateOn(bool gate) {
-    if (_resetMode == FREE_RUN) return; //don't reset
+    if (_resetMode.value == FREE_RUN) return; //don't reset
 
     if (gate) {
-        if (_resetMode == LEGATO) return; //don't reset
+        if (_resetMode.value == LEGATO) return; //don't reset
 
         digitalWrite(RESET_PIN, LOW); //force reset
         delayMicroseconds(10);
@@ -55,6 +41,7 @@ void HW_LFO::gateOn(bool gate) {
 }
 
 void HW_LFO::gateOff() {
-    if (_resetMode == FREE_RUN) return;
+    if (_resetMode.value == FREE_RUN) return;
+
     digitalWrite(RESET_PIN, LOW);
 }

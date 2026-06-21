@@ -134,6 +134,15 @@ void setup() {
         voice.noteOff(scaledNote, 100);
         voice.osc.setNote(scaledNote);
     };
+
+    //Init patch
+    voice.vcf.cutoff.set(64);
+    voice.osc.pwmDA.delay.set(0);
+    voice.osc.pwmDA.attack.set(0);
+    voice.osc.pwmLFO.depth.set(64);
+    voice.vcf.keyTracking.set(127 * .3);
+    voice.vcfAccAmt.set(127 * .25);
+    voice.glideTime.set(127 * .25);
 }
 
 void loop() {
@@ -148,6 +157,14 @@ void loop() {
 //    sprintf(buffer, "Byte: %d", test);
 //    u8g2.drawStr(0, 10, buffer);
 //    u8g2.sendBuffer();
+
+    //Idea: have "routes" with a source Modulator, a depth Param, and a destination Param(or FloatParam)
+    //any time the array of routes is changed, find all the destinations in it
+    //On an update:
+    //  zero out a summing node for each unique destination
+    //  process each route, adding each result to the destination summing node
+    //  loop over the destinations, test if the sum is different from the prev value
+    //  call hardware updating function if they've changed
 
     if (stepFlag) { //4kHz
         stepFlag = false;
@@ -168,7 +185,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 32;
+constexpr uint8_t PARAM_COUNT = 37;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
     { 5, voice.osc.pwmADSR.attack },
@@ -194,16 +211,22 @@ const CCbind ccs[PARAM_COUNT] = {
     { 25, voice.vcf.keyTracking },
     { 26, voice.vcfAccAmt },
     { 27, voice.glideTime }, //TODO: put on CC 5
-    { 28, voice.env.attack },
-    { 29, voice.env.decay },
-    { 30, voice.env.sustain },
-    { 31, voice.env.release },
+    { 28, voice.accentADSR.attack },
+    { 29, voice.accentADSR.decay },
+    { 30, voice.accentADSR.sustain },
+    { 31, voice.accentADSR.release },
     { 32, voice.lfo.rate },
     { 33, voice.lfo.waveform },
-    { 34, voice.lfo.reset },
+    { 34, voice.lfo.resetMode },
+    { 35, voice.env.polarity },
 
     { 71, voice.vcf.resonance },
     { 72, NoteAssigner::notePriority },
+
+    { 74, voice.env.attack },
+    { 75, voice.env.decay },
+    { 76, voice.env.sustain },
+    { 77, voice.env.release },
 };
 
 void midiCcHandler(uint8_t cc, uint8_t val) {

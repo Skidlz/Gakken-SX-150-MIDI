@@ -3,12 +3,11 @@
 SW_LFO::SW_LFO(const char* p) : prefix(p),
         rate  { "Rate", getRateStr, &prefix },
         depth { "Depth", Param::toPercentStr, &prefix },
-        waveform { "Waveform", getWaveformStr, &prefix },
+        waveform { "Waveform", _waveform.getStr, &prefix },
         reset { "Reset", getPhaseStr, &prefix },
         slew { "Slew Time", getSlewStr, &prefix } {
-    //TODO: fix Reset readout to show off or phase percentage
-    //idea, don't reset with legato notes
-    _waveform = TRIANGLE;
+    //TODO: option to skip reset with legato notes
+    _waveform.value = TRIANGLE;
     _phase = 0;
     setRate(.5);
     step();
@@ -18,15 +17,15 @@ void SW_LFO::step() { //progress by one tick
     //update using any dirty params
     if (rate.dirty) setRate(rate.get());
     if (depth.dirty) scale = depth.get();
-    constexpr float WAVE_SCALE = 127.0 * WAVE_COUNT / 128.0;
-    if (waveform.dirty)
-        setWaveform(static_cast<Waveform>(waveform.get() * WAVE_SCALE));
+
+    _waveform.update(waveform);
+
     if (slew.dirty) setSlew(slew.get());
 
     _phase += _stepSize;
 
     float tempOut = 0;
-    switch (_waveform) {
+    switch (_waveform.value) {
         case TRIANGLE:
             tempOut = (_phase < HALF_MAX) ? (float)_phase / HALF_MAX : (float)(MAX - _phase) / HALF_MAX;
             break;
@@ -98,16 +97,6 @@ const char* SW_LFO::getSlewStr(char* buffer, size_t size, uint8_t value) {
     return buffer;
 }
 
-void SW_LFO::setWaveform(Waveform waveform) {
-    _waveform = waveform;
-}
-
-const char* SW_LFO::getWaveformStr(char* buffer, size_t size, uint8_t value) {
-    snprintf(buffer, 25, "%21s", WaveformNames[value * WAVE_COUNT / 128]); //pad string
-    return buffer;
-}
-
-//
 const char* SW_LFO::getPhaseStr(char* buffer, size_t size, uint8_t value) {
     return (!value) ? "  0ff" : Param::toPercentStr(buffer, size, value);
 }
@@ -193,6 +182,7 @@ void SW_ADSR::setSustain(float sustain) {
     _stages[DECAY].target = sustain;
 }
 
+//TODO: pass in gate and add legato option?
 void SW_ADSR::gateOn() {
     _currentStage = ATTACK;
     sampHoldClock.gateOn();
