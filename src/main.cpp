@@ -44,7 +44,7 @@ DigiPot resonancePot = digiPot2.getChannel(MCP4251::POT1, { .invert = true });
 DigiPot volumePot = digiPot2.getChannel(MCP4251::POT2);
 DigiPot vcfDrivePot = digiPot2.getChannel(MCP4251::POT3, { .invert = true });
 
-HW_adsr adsr(D3, D5, D4, sustainDac);
+HW_ADSR adsr(D3, D5, D4, sustainDac);
 
 touchStrip touchStrip;
 
@@ -66,12 +66,12 @@ void midiCcHandler(uint8_t key, uint8_t ptr);
 void setup() {
     Serial1.begin(31250); //MIDI baud
     Serial.begin(115200); //debug port
-    //delay(1000); //let serial connect
 
     //Terminal needs RTS/CTS flow to work!
-    //while (!Serial) {} //wait for debug serial port to connect
+//    delay(1000); //let serial connect
+//    while (!Serial) {} //wait for debug serial port to connect
 
-    Oscillator::initTimer(); //start timer for measuring frequency
+    HW_VCO::initTimer(); //start timer for measuring frequency
 
     analogWriteResolution(12); //change DAC to 12-bit resolution
 
@@ -126,13 +126,13 @@ void setup() {
     };
 
     touchStrip.updatedCB = [](float reading){
-        voice.osc.setNote(touchStrip::scaleNote(reading)); //play note
+        voice.osc.setNoteHW(touchStrip::scaleNote(reading)); //play note
     };
 
     touchStrip.releasedCB = [](float reading){
         float scaledNote = touchStrip::scaleNote(reading);
         voice.noteOff(scaledNote, 100);
-        voice.osc.setNote(scaledNote);
+        voice.osc.setNoteHW(scaledNote);
     };
 
     //Init patch
@@ -158,14 +158,6 @@ void loop() {
 //    u8g2.drawStr(0, 10, buffer);
 //    u8g2.sendBuffer();
 
-    //Idea: have "routes" with a source Modulator, a depth Param, and a destination Param(or FloatParam)
-    //any time the array of routes is changed, find all the destinations in it
-    //On an update:
-    //  zero out a summing node for each unique destination
-    //  process each route, adding each result to the destination summing node
-    //  loop over the destinations, test if the sum is different from the prev value
-    //  call hardware updating function if they've changed
-
     if (stepFlag) { //4kHz
         stepFlag = false;
 
@@ -185,7 +177,7 @@ struct CCbind { //binds MIDI CC number to Param
     Param& param;
 };
 
-constexpr uint8_t PARAM_COUNT = 37;
+constexpr uint8_t PARAM_COUNT = 38;
 const CCbind ccs[PARAM_COUNT] = {
     //{ 5, voice.glideTime },
     { 5, voice.osc.pwmADSR.attack },
@@ -219,6 +211,7 @@ const CCbind ccs[PARAM_COUNT] = {
     { 33, voice.lfo.waveform },
     { 34, voice.lfo.resetMode },
     { 35, voice.env.polarity },
+    { 35, voice.routes[0].depth },
 
     { 71, voice.vcf.resonance },
     { 72, NoteAssigner::notePriority },

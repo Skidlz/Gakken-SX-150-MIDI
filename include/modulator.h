@@ -11,7 +11,6 @@ public:
     virtual void gateOff() {};
     float output = 0;
     float scale = 1;
-    float offset = 0;
 
 private:
 
@@ -21,7 +20,7 @@ protected: //consts for child classes
 };
 
 //LFO--------------------------------------------------------------------------
-class SW_LFO: public Modulator {
+class SW_LFO : public Modulator {
 public:
     enum Waveform : uint8_t { TRIANGLE, SQUARE, SINE, SAW, NOISE, WAVE_COUNT };
 
@@ -30,8 +29,6 @@ public:
     void gateOn() override;
     void setRate(float rate);
     void setSlew(float rate);
-    void setWaveform(Waveform waveform);
-    float output = 0;
 
     Param rate;
     Param depth;
@@ -63,7 +60,6 @@ private:
     const char* prefix;
     static const char* getRateStr(char* buffer, size_t size, uint8_t value);
     static const char* getSlewStr(char* buffer, size_t size, uint8_t value);
-    static const char* getWaveformStr(char* buffer, size_t size, uint8_t value);
     static const char* getPhaseStr(char* buffer, size_t size, uint8_t value);
 
     float _rate = .01;
@@ -75,7 +71,7 @@ private:
 };
 
 //Clock-------------------------------------------------------------------------
-class SW_CLOCK: public Modulator {
+class SW_CLOCK : public Modulator {
 public:
     SW_CLOCK(const char* p);
     void step() override;
@@ -101,7 +97,7 @@ private:
 };
 
 //ADSR-------------------------------------------------------------------------
-class SW_ADSR: public Modulator {
+class SW_ADSR : public Modulator {
 public:
     //PWM stages are first, then sustain
     enum Stage { ATTACK, DECAY, RELEASE, SUSTAIN, STAGE_COUNT};
@@ -113,8 +109,6 @@ public:
 
     void gateOn() override;
     void gateOff() override;
-
-    float output = 0;
 
     SW_CLOCK sampHoldClock { "ADSR" }; //TODO add prefix support
 
@@ -147,7 +141,7 @@ private:
 };
 
 //Delay Attack-----------------------------------------------------------------
-class SW_DA: public Modulator {
+class SW_DA : public Modulator {
 public:
     //PWM stages are first, then sustain
     enum Stage { DELAY, ATTACK, STALL };
@@ -157,8 +151,6 @@ public:
 
     void gateOn() override;
     void gateOff() override;
-
-    float output = 0;
 
     float values[2];
 

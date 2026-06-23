@@ -5,9 +5,9 @@
 #include "parameter.h"
 #include "BD79702.h" //DAC
 
-class HW_adsr {
+class HW_ADSR {
 public:
-    HW_adsr(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac);
+    HW_ADSR(uint8_t atk_pin, uint8_t dec_pin, uint8_t rel_pin, Dac& dac);
     //PWM stages are first, then sustain
     enum Stage { ATTACK, DECAY, RELEASE, SUSTAIN, STAGE_COUNT };
     enum Polarity { NORMAL, INVERT, POL_COUNT };

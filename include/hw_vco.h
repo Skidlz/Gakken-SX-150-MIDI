@@ -6,7 +6,7 @@
 #include "BD79702.h" //DAC
 #include "parameter.h"
 
-class Oscillator {
+class HW_VCO {
 public:
     enum Waveform : uint8_t { SAW, PULSE, TRIANGLE, SUB_SAW, SUB_PULSE, SUB_TRI,
         PULSE_SAW, PULSE_INV_SAW, PULSE_TRI,
@@ -14,9 +14,9 @@ public:
         SUPER_SAW, SUPER_INV_SAW, DOUBLE_PULSE, SUPER_TRI,
         SUB_SUP_SAW, SUB_SUP_INV_SAW, SUB_DUB_PULSE, SUB_SUP_TRI, NO_WAVE, WAVE_COUNT };
 
-    SW_LFO pwmLFO {"PWM LFO"};
-    SW_DA pwmDA { "PWM LFO "}; //delay attack envelope
-    SW_ADSR pwmADSR { "PWM Env"};
+    SW_LFO pwmLFO{ "PWM LFO" };
+    SW_DA pwmDA{ "PWM LFO" }; //delay attack envelope
+    SW_ADSR pwmADSR{ "PWM Env" };
 
     Modulator* _modulators[3];
 
@@ -29,8 +29,8 @@ public:
     //MIDI note
     static constexpr uint8_t C5 = 60, C2 = 36, NOTE_A4 = 69;
 
-    Oscillator(DigiPot& pwmPot);
-    void setNote(float note);
+    HW_VCO(DigiPot& pwmPot);
+    void setNoteHW(float note);
     void calibrate();
     float measureFreq();
     float getAvgFreq();
@@ -43,6 +43,8 @@ public:
 
     Param waveform { "Waveform", _waveform.getStr };
     Param pwm { "PWM" };
+    Param pitch { "Pitch" }; //ignore CC. Pass value through .modulation
+    float note;
 private:
     //assign bit positions to the components of a waveform
     enum waveformBits { saw_b = 1, sqr1_b = (1 << 1), sqr2_b = (1 << 2), tri_b =(1 << 3), sub_b = (1 << 4), inv_saw_b = (1 << 5) };

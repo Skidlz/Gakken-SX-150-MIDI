@@ -3,7 +3,7 @@
 
 //Library to control modified hardware oscillator in Gakken SX-150
 
-Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
+HW_VCO::HW_VCO(DigiPot& pwmPot) : _pwmPot(pwmPot),
         _modulators { &pwmLFO, &pwmADSR, &pwmDA } {
     tuneScaling = 1.0;
     tuningOffset = 0;
@@ -17,7 +17,7 @@ Oscillator::Oscillator(DigiPot& pwmPot) : _pwmPot(pwmPot),
 }
 
 //toggles pins to pick waveform
-void Oscillator::setWaveformHW(Waveform waveform) {
+void HW_VCO::setWaveformHW(Waveform waveform) {
     uint8_t config = waveformDefinitions[waveform];
 
     digitalWrite(SAW_SW, !!(config & saw_b));
@@ -35,14 +35,14 @@ void Oscillator::setWaveformHW(Waveform waveform) {
 }
 
 //measures oscillator and sets tuning variabels to compensate
-void Oscillator::calibrate() {
+void HW_VCO::calibrate() {
     setWaveformHW(NO_WAVE); //silence osc for calibration
 
-    setNote(C2); //play low note
+    setNoteHW(C2); //play low note
     delay(100); //let it stabilize
     float lowResult = measureFreq();
 
-    setNote(C5); //play high note
+    setNoteHW(C5); //play high note
     delay(100); //let it stabilize
     float hiResult = measureFreq();
 
@@ -54,7 +54,10 @@ void Oscillator::calibrate() {
     tuningOffset = lowResult - (tuneScaling * (C2 - LOW_NOTE)) - LOW_NOTE;
 }
 
-void Oscillator::setNote(float note) {
+void HW_VCO::setNoteHW(float note) {
+    note += pitch.modulation * 32; //arbitrary max modulation depth of +-32 notes
+    pitch.dirty = false;
+
     //truncate note range
     if (note >= LOW_NOTE) note -= LOW_NOTE;
     //if (note >= HIGH_NOTE) note = ((note - HIGH_NOTE) % 12) + (HIGH_NOTE - 12); //transpose to top octave
@@ -65,7 +68,7 @@ void Oscillator::setNote(float note) {
     analogWrite(A0, dacValue);
 }
 
-float Oscillator::measureFreq() { //returns equiv MIDI note
+float HW_VCO::measureFreq() { //returns equiv MIDI note
     readingsIndex = 0;
     readingsComplete = false;
 
@@ -78,7 +81,7 @@ float Oscillator::measureFreq() { //returns equiv MIDI note
     return note;
 }
 
-float Oscillator::getAvgFreq() {
+float HW_VCO::getAvgFreq() {
     uint64_t averageReading = 0; //get average of all readings
     for (uint8_t i = 0; i < READINGS_MAX; i++) averageReading += readingsBuffer[i];
     averageReading /= READINGS_MAX;
@@ -87,7 +90,7 @@ float Oscillator::getAvgFreq() {
 }
 
 //interrupt service routine for measuring Osc frequency
-void Oscillator::captureISR() {
+void HW_VCO::captureISR() {
     static uint32_t lastTS = 0; //previous input capture reading
     static uint32_t currentTS = 0;
 
@@ -105,7 +108,7 @@ void Oscillator::captureISR() {
     R_ICU->IELSR_b[IRQn_CCMPA].IR = 0;
 }
 
-void Oscillator::initTimer() { //hardware timer setup
+void HW_VCO::initTimer() { //hardware timer setup
     static bool timerInitialized = false;
 
     if (timerInitialized) return; //only run once regardless of osc count
@@ -137,7 +140,7 @@ void Oscillator::initTimer() { //hardware timer setup
     //Interrupt Setup--------------------------------------------------------------------------------
     //assign GPT0 Capture to IRQn_CCMPA (AGT0_INT_IRQn #17)
     R_ICU->IELSR_b[IRQn_CCMPA].IELS = ELC_EVENT_GPT0_CAPTURE_COMPARE_A;
-    NVIC_SetVector(IRQn_CCMPA, (uint32_t)&Oscillator::captureISR); //point to the ISR function
+    NVIC_SetVector(IRQn_CCMPA, (uint32_t)&HW_VCO::captureISR); //point to the ISR function
     NVIC_SetPriority(IRQn_CCMPA, 12);
     NVIC_EnableIRQ(IRQn_CCMPA);
 
@@ -146,11 +149,11 @@ void Oscillator::initTimer() { //hardware timer setup
     timerInitialized = true;
 }
 
-void Oscillator::setPWMhw(float newValue) {
+void HW_VCO::setPWMhw(float newValue) {
     _pwmPot.write(newValue / 2); //duty cycle only needs to go from 0-50%
 }
 
-void Oscillator::update() {
+void HW_VCO::update() {
     //update all modulators
     for (Modulator* m : _modulators) m->step();
 
@@ -161,9 +164,13 @@ void Oscillator::update() {
 
     //change the hardware if the waveform changed
     if (_waveform.update(waveform)) setWaveformHW(_waveform.value);
+
+    //if (pitch.dirty)
+    //TODO: need dirty logic for note, or pitch dirty doesn't matter
+    setNoteHW(note);
 }
 
-void Oscillator::gateOn(bool gate) {
+void HW_VCO::gateOn(bool gate) {
     if (gate) {
         if (legato) return; //don't retrigger
 
@@ -173,6 +180,6 @@ void Oscillator::gateOn(bool gate) {
     for (Modulator* m : _modulators) m->gateOn();
 }
 
-void Oscillator::gateOff() {
+void HW_VCO::gateOff() {
     for (Modulator* m : _modulators) m->gateOff();
 }

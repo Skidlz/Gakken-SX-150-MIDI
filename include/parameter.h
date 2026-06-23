@@ -1,16 +1,16 @@
 #pragma once
 
 #include <Arduino.h>
-#include <cstring>
+//#include <cstring>
 
-struct Param {
-    const char *name;
-    const char * (*getValueStr)(char * buffer, size_t size, uint8_t value) = Param::toPercentStr;
+//simple params lack modulation and can be used for things like global settings
+struct SimpleParam {
+    const char* name;
+    const char* (*getValueStr)(char* buffer, size_t size, uint8_t value) = SimpleParam::toPercentStr;
     const char** prefix = nullptr; //points to prefix string (used for Modulators)
 
     uint8_t value{}; //raw 7-bit CC value
     bool dirty{}; //flag to say that the value has changed
-    float modulation = 0; //used to pass in external modulation
 
     static constexpr uint8_t VAL_BUFFER_LEN = 25;
 
@@ -19,18 +19,13 @@ struct Param {
         value = cc;
     }
 
-    void setMod(float m) {
-        if (modulation != m) dirty = true;
-        modulation = m;
-    }
-
     float get() {
         dirty = false; //assume the value was used to update parent
-        return value / 127.0;
+        return value / 127.0f;
     }
 
-    const char * toString(char * buffer, size_t size) const {
-        return getValueStr(buffer, size, value); //pass value to function
+    const char* toString(char* buffer, size_t size) const {
+        return getValueStr(buffer, size, value); //used to pass 'value' into string function
     }
 
     //appends an optional prefix to the params
@@ -41,15 +36,13 @@ struct Param {
         return buf;
     }
 
-    //static string formatting functions----------------------------
     static const char* toIntStr(char* buffer, size_t size, uint8_t val) {
-        std::strcpy(buffer, std::to_string(val).c_str());
-        snprintf(buffer, size, "%4d", val); //pad number
+        snprintf(buffer, size, "%4d", val);
         return buffer;
     }
 
     static const char* toBoolStr(char* buffer, size_t size, uint8_t val) {
-        std::strncpy(buffer, (val >= 64) ? "  On" : " Off", size);
+        strncpy(buffer, (val >= 64) ? "  On" : " Off", size);
         return buffer;
     }
 
@@ -59,6 +52,16 @@ struct Param {
         dtostrf(result, 4, 1, floatBuffer);
         snprintf(buffer, size, "%5s%%", floatBuffer); //pad number
         return buffer;
+    }
+};
+
+struct Param : public SimpleParam {
+    float modulation = 0; //used to pass in external modulation
+    float summingNode = 0; //accumulates modulation each tick
+
+    void setMod(float m) {
+        if (modulation != m) dirty = true;
+        modulation = m;
     }
 };
 

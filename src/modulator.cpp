@@ -149,7 +149,6 @@ SW_ADSR::SW_ADSR(const char* p) : prefix(p),
     _phase = 0;
     _currentStage = RELEASE;
     scale = 1;
-    offset = 0;
 
     //set up the stages
     _stages[ATTACK] = { 0.005, 3, 0, 0, 0, 1.5 };
@@ -208,7 +207,7 @@ void SW_ADSR::step() {
     }
 
     if (!sampHoldClock.rate.value) { //ignore SH if stopped
-        output = _phase * scale + offset;
+        output = _phase * scale;
         return;
     }
 
@@ -216,7 +215,7 @@ void SW_ADSR::step() {
     float lfoBefore = sampHoldClock.output;
     sampHoldClock.step();
     if (!lfoBefore && sampHoldClock.output)
-        output = _phase * scale + offset;
+        output = _phase * scale;
 }
 
 //Delay Attack-------------------------------------------------------------------------------------
@@ -226,7 +225,6 @@ SW_DA::SW_DA(const char* p) : prefix(p),
     _phase = 0;
     _currentStage = ATTACK;
     scale = 1;
-    offset = 0;
 
     //set up the stages
     _stages[DELAY] = { 0.1, 3, 0, 0, .5 };
