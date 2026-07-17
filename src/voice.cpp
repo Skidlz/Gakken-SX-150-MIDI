@@ -16,7 +16,32 @@ Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwm
     routes[0].depth.set(64);
     routes[1].depth.set(64);
 
-    buildDestinations(); //figure out what the routes target
+    modSort.reserve(NUM_ROUTES * 4); //allocate enough room for source1, source2, route, and dest owner
+}
+
+void Voice::evalRoutes() {
+    std::map<Param*, Modulator*> paramToOwner;
+
+    for (Route& route : routes) //find owner of all Params
+        for (Param* param : { route.destination, &route.depth })
+            if (Modulator* mod = findOwner(param))
+                paramToOwner[param] = mod;
+
+    RouteGraph::generateModOrder(routes, routesUsed, paramToOwner, modSort);
+}
+
+Modulator* Voice::findOwner(Param* param) {
+    if (param == nullptr) return nullptr;
+
+    //search Voice modulators
+    for (Modulator* modulator : std::initializer_list<Modulator*>{ &accentADSR, &vcaADSR })
+        if (Modulator* owner = modulator->findOwner(param)) return owner;
+
+    //search modulators owned by Osc, etc
+    if (Modulator* owner = osc.findOwner(param)) return owner;
+    //if (Modulator* owner = vcf.findOwner(param)) return owner;
+
+    return nullptr;
 }
 
 void Voice::setGlideTime(float time) {
@@ -88,62 +113,20 @@ void Voice::setPitchBend(int16_t bend) {
     currentBend = ((bend / 8192.0) - 1); //±1 semitone
 }
 
-void Voice::buildDestinations() { //loop over all routes, making a deduped list of destination params
-    //TODO: init params to have NaN as their summingNode value
-    // if anything clears that, it must be routed.
-    // if de-routed, re-assign NaN
-    // owner of Param tests summingNode on update, and has to own node if NaN
-    //  else only add modulation to it
-
-    destinationCount = 0;
-    for (const Route& r : routes) {
-        if (!r.destination) continue;
-
-        int8_t index = destinationCount; //only add if not a duplicate
-        while (index--) if (destinations[index] == r.destination) break;
-        if (index == -1) destinations[destinationCount++] = r.destination;
-    }
-}
-
 void Voice::update() {
     if (glideTime.dirty) setGlideTime(glideTime.get());
     if (gate && glideOn) updateGlide(); //only glide when key(s) held
+    osc.note = (currentGlideNote + (currentBend * bendRange));
 
-    //update modulators
-    accentADSR.step();
+    //update HW modulators and anything that isn't routed
     vcaADSR.step();
     env.update();
 
-    osc.note = (currentGlideNote + (currentBend * bendRange));
+    //Update all modulators in topological order
+    for (Modulator* mod : modSort) mod->step();
 
-    //Process Routes-------------------------------------------------------------------------------
-    //zero summing nodes
-    for (size_t i = destinationCount; i--;) destinations[i]->summingNode = 0;
-
-    //base keytracking off of the actual pitch we set the Osc to
-    float keytrackOffset = (vcf.keyTracking.value != 0) ? (osc.note / 127) * vcf.keyTracking.get() : 0;
-    vcf.cutoff.summingNode = (accentADSR.output * vcfAccAmt.get()) + keytrackOffset;
-
-    //add in any other modulation here:
-
-    for (Route& r : routes) r.step(); //process routes to update nodes
-
-    //update route destination params with summed values
-    for (size_t i = destinationCount; i--;) destinations[i]->setMod(destinations[i]->summingNode);
-
-    //debug
-    static int debugCount = 0;
-    static int delayDebug = 0;
-    if (delayDebug++ > 2000 && debugCount++ < 1) {  // print once
-        debugCount = 1;
-
-        Serial.print("routes[1] source output (via pointer): ");
-        Serial.println(routes[1].source->output);
-    }
-
-    vcf.cutoff.setMod(vcf.cutoff.summingNode);
-
-    //TODO: make sure all destinations know to use the new Param.modulation
+    //set dummy Modulator to pass in keyTracking
+    vcf.keyTrackMod.input = (vcf.keyTracking.value != 0) ? (osc.note / 127) * vcf.keyTracking.get() : 0;
 
     vcf.update();
     osc.update();

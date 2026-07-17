@@ -154,13 +154,9 @@ void HW_VCO::setPWMhw(float newValue) {
 }
 
 void HW_VCO::update() {
-    //update all modulators
-    for (Modulator* m : _modulators) m->step();
+    for (Param* param : { &waveform, &pwm, &pitch }) param->commit();
 
-    //calc PWM modulation. DA envelope fades in LFO
-    float scaledPWMlfo = (pwmLFO.output * pwmDA.output * pwmLFO.scale) / 2;
-    pwm.setMod(pwmADSR.output + scaledPWMlfo);
-    if (_pwm.update(pwm)) setPWMhw(_pwm.value);
+    if (pwm.dirty) setPWMhw(pwm.get());
 
     //change the hardware if the waveform changed
     if (_waveform.update(waveform)) setWaveformHW(_waveform.value);
@@ -182,4 +178,13 @@ void HW_VCO::gateOn(bool gate) {
 
 void HW_VCO::gateOff() {
     for (Modulator* m : _modulators) m->gateOff();
+}
+
+Modulator * HW_VCO::findOwner(Param* param) {
+    if (param == nullptr) return nullptr;
+
+    for (Modulator* modulator : _modulators)
+        if (Modulator* owner = modulator->findOwner(param)) return owner;
+
+    return nullptr;
 }

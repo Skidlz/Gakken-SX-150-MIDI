@@ -10,6 +10,7 @@
 #include "BD79702.h" //DAC
 #include "parameter.h"
 #include "route.h"
+#include <vector>
 
 class Voice {
 public:
@@ -29,14 +30,22 @@ public:
 
     //Route handling variables
     static constexpr uint8_t NUM_ROUTES = 20;
-    Param* destinations[NUM_ROUTES];
-    size_t destinationCount = 0;
+    std::vector<Modulator *> modSort;
+    uint8_t routesUsed = 4;
+
     Route routes[NUM_ROUTES] = {
-//        Route(&osc.pwmLFO, &osc.pitch, &accentADSR, "Route 1"),
-//        Route(&accentADSR, &routes[0].depth, nullptr, "Route 2"),
-        Route(&osc.pwmLFO, nullptr, &accentADSR, "Route 1"),
-        Route(&routes[0], &osc.pitch, nullptr, "Route 2"),
+        Route(&osc.pwmLFO, &osc.pwm, &osc.pwmDA, "PWM LFO"), //DA envelope fades in PWM lfo
+        Route(&osc.pwmADSR, &osc.pwm, nullptr, "PWM ADSR"),
+        Route(&accentADSR, &vcf.cutoff, nullptr, "Act Env > Cut"),
+        Route(&vcf.keyTrackMod, &vcf.cutoff, nullptr, "Keytracking"),
     };
+
+    //TODO: move static routes to end of array
+    //aliases
+    Route& pwmLFO = routes[0];
+    Route& pwmADSR = routes[1];
+    Route& vcfAccAmt = routes[2];
+    Route& keyTrack = routes[3];
 
     Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac, HW_ADSR& adsr);
     void setGlideTime(float time);
@@ -46,10 +55,10 @@ public:
     void noteOff(uint8_t note, uint8_t vel);
     void setPitchBend(int16_t bend);
     void update(); //steps through all modulators and update outputs
-    void buildDestinations();
+    void evalRoutes();
+    Modulator* findOwner(Param* param);
 
-    Param glideTime { "Glide Time", getGlideTime };
-    Param vcfAccAmt { "VCF Accent" };
+    SimpleParam glideTime { "Glide Time", getGlideTime };
 private:
     float currentBend = 0; //current bend amount
     float currentGlideNote = HW_VCO::NOTE_A4; //current note without any modulation,bend

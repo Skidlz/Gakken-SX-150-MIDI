@@ -39,6 +39,7 @@ public:
     void gateOff();
     void setPWMhw(float newValue);
     void setWaveformHW(Waveform waveform);
+    Modulator * findOwner(Param* param);
     static void initTimer(); //static method to set up timer once
 
     Param waveform { "Waveform", _waveform.getStr };
@@ -82,8 +83,6 @@ private:
 
     //make helper struct for Enum Params. Makes string function, converts/stores enum
     EnumParam<Waveform, WAVE_COUNT, WaveformNames, 21> _waveform;
-
-    FloatParam _pwm;
 
     //settings that define each waveform
     static constexpr uint8_t waveformDefinitions[WAVE_COUNT] = {

@@ -2,6 +2,7 @@
 
 #include "Arduino.h"
 #include "parameter.h"
+#include "modulator.h"
 #include "BD79702.h" //DAC
 #include "MCP4251.h" //DigiPot
 
@@ -16,6 +17,7 @@ public:
     void updateCutHW(float newCut);
     void update();
     void setModeHW(Mode newMode);
+    ValueSource keyTrackMod; //dummy Modulator to pass keytracking
 
     Param cutoff { "Cutoff" };
     Param resonance { "Resonance" };
@@ -25,8 +27,6 @@ public:
 private:
     static constexpr const char* modeNames[] = { [LO_PASS] = "Low Pass", [HI_PASS] = "High Pass" };
     EnumParam<Mode, MODE_COUNT, modeNames, 10> _mode;
-
-    FloatParam _cutoff;
 
     Dac& _cutoffDac;
     DigiPot& _resonancePot;

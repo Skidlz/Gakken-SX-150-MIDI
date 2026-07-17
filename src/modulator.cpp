@@ -2,7 +2,6 @@
 
 SW_LFO::SW_LFO(const char* p) : prefix(p),
         rate  { "Rate", getRateStr, &prefix },
-        depth { "Depth", Param::toPercentStr, &prefix },
         waveform { "Waveform", _waveform.getStr, &prefix },
         reset { "Reset", getPhaseStr, &prefix },
         slew { "Slew Time", getSlewStr, &prefix } {
@@ -14,9 +13,11 @@ SW_LFO::SW_LFO(const char* p) : prefix(p),
 }
 
 void SW_LFO::step() { //progress by one tick
+    //commit any modulation waiting on our Params
+    for (const auto param : Params) (this->*param).commit();
+
     //update using any dirty params
     if (rate.dirty) setRate(rate.get());
-    if (depth.dirty) scale = depth.get();
 
     _waveform.update(waveform);
 
@@ -110,6 +111,9 @@ SW_CLOCK::SW_CLOCK(const char* p) : prefix(p),
 }
 
 void SW_CLOCK::step() { //progress by one tick
+    //commit any modulation waiting on our Params
+    for (const auto param : Params) (this->*param).commit();
+
     if (rate.dirty) setRate(rate.get());
 
     _phase += _stepSize;
@@ -191,6 +195,8 @@ void SW_ADSR::gateOff() { _currentStage = RELEASE; }
 
 void SW_ADSR::step() {
     auto& [minPeriod, maxPeriod, range, alpha, rate, target] = _stages[_currentStage];
+    //commit any modulation waiting on our Params
+    for (const auto param : Params) (this->*param).commit();
 
     if (attack.dirty) setRate(ATTACK, attack.get());
     if (decay.dirty) setRate(DECAY, decay.get());
@@ -257,6 +263,9 @@ void SW_DA::gateOn() {
 void SW_DA::gateOff() {  }
 
 void SW_DA::step() { //delay at 0, expo rise to 1 __..'¯¯¯
+    //commit any modulation waiting on our Params
+    for (const auto param : Params) (this->*param).commit();
+    
     if (delay.dirty) setRate(DELAY, delay.get());
     if (attack.dirty) setRate(ATTACK, attack.get());
 

@@ -71,14 +71,14 @@ void setup() {
 //    delay(1000); //let serial connect
 //    while (!Serial) {} //wait for debug serial port to connect
 
+    //sort modulators in routes for processing by voice.update()
+    voice.evalRoutes();
+
     HW_VCO::initTimer(); //start timer for measuring frequency
 
     analogWriteResolution(12); //change DAC to 12-bit resolution
 
     DAC0.begin();
-    //TODO: make array in init values
-    lfoRateDac.write(0.5);
-    vcfCutDac.write(0.5);
 
     //Digipot--------------------------------------------------------
     digiPot1.begin();
@@ -136,12 +136,13 @@ void setup() {
     };
 
     //Init patch
+    voice.lfo.rate.set(64);
     voice.vcf.cutoff.set(64);
     voice.osc.pwmDA.delay.set(0);
     voice.osc.pwmDA.attack.set(0);
-    voice.osc.pwmLFO.depth.set(64);
+    voice.pwmLFO.depth.set(64); //route
     voice.vcf.keyTracking.set(127 * .3);
-    voice.vcfAccAmt.set(127 * .25);
+    voice.vcfAccAmt.depth.set(127 * .25); //route
     voice.glideTime.set(127 * .25);
 }
 
@@ -174,7 +175,7 @@ void loop() {
 //------------------------------------
 struct CCbind { //binds MIDI CC number to Param
     uint8_t ccNumber;
-    Param& param;
+    SimpleParam& param;
 };
 
 constexpr uint8_t PARAM_COUNT = 38;
@@ -194,14 +195,16 @@ const CCbind ccs[PARAM_COUNT] = {
     { 16, voice.osc.pwm },
     { 17, voice.osc.pwmLFO.rate },
     { 18, voice.osc.pwmLFO.waveform },
-    { 19, voice.osc.pwmLFO.depth },
+//    { 19, voice.osc.pwmLFO.depth },
+    { 19, voice.pwmLFO.depth }, //route 0
     { 20, voice.osc.pwmLFO.reset },
     { 21, voice.osc.pwmDA.delay },
     { 22, voice.osc.pwmDA.attack },
     { 23, voice.osc.pwmADSR.sampHoldClock.rate },
     { 24, voice.osc.pwmLFO.slew },
-    { 25, voice.vcf.keyTracking },
-    { 26, voice.vcfAccAmt },
+//    { 25, voice.vcf.keyTracking },
+    { 25, voice.keyTrack.depth }, //route 3
+    { 26, voice.vcfAccAmt.depth }, //route 2
     { 27, voice.glideTime }, //TODO: put on CC 5
     { 28, voice.accentADSR.attack },
     { 29, voice.accentADSR.decay },
@@ -211,7 +214,7 @@ const CCbind ccs[PARAM_COUNT] = {
     { 33, voice.lfo.waveform },
     { 34, voice.lfo.resetMode },
     { 35, voice.env.polarity },
-    { 35, voice.routes[0].depth },
+    { 36, voice.pwmADSR.depth }, //route 1
 
     { 71, voice.vcf.resonance },
     { 72, NoteAssigner::notePriority },

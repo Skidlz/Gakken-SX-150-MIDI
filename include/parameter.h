@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Arduino.h>
-//#include <cstring>
 
 //simple params lack modulation and can be used for things like global settings
 struct SimpleParam {
@@ -56,12 +55,22 @@ struct SimpleParam {
 };
 
 struct Param : public SimpleParam {
-    float modulation = 0; //used to pass in external modulation
-    float summingNode = 0; //accumulates modulation each tick
+    float modulation = 0; //holds final modulation
+    float summingNode = 0; //accumulates modulation from routes
 
-    void setMod(float m) {
-        if (modulation != m) dirty = true;
-        modulation = m;
+    void commit() { //store and clear summingNode
+        if (modulation != summingNode) dirty = true;
+        modulation = summingNode;
+        summingNode = 0.0; //get ready for another cycle of adding modulation
+    }
+
+    float get() {
+        float newValue = SimpleParam::get() + modulation;
+
+        if (newValue < 0) newValue = 0; //clip to 0.0-1.0
+        if (newValue > 1) newValue = 1;
+
+        return newValue;
     }
 };
 
@@ -90,23 +99,6 @@ struct EnumParam {
     bool update(Param& p) { //update enum from param. return true if the *enum* changed
         if (!p.dirty) return false;
 
-        return set(p.get() + p.modulation);
-    }
-};
-
-//helper struct that combines Param values and detects changes
-struct FloatParam {
-    float value = 0.0f;
-
-    bool update(Param& p) { //combine value and modulation. return true if value changed
-        if (!p.dirty) return false;
-        float newValue = p.get() + p.modulation;
-
-        if (newValue < 0.0f) newValue = 0.0f;
-        if (newValue > 1.0f) newValue = 1.0f;
-        if (newValue == value) return false;
-
-        value = newValue;
-        return true;
+        return set(p.get());
     }
 };

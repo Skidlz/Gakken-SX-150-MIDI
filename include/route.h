@@ -2,38 +2,37 @@
 
 #include "parameter.h"
 #include "modulator.h"
-
-//idea, add operations to routes other than the implicit multiply of "depth"
-//  add, subtract, min/max, clamp, modulo (?), xor abs(A - B)
-
-//Voice owns a finite list of routes
-//Each route is ticked, and the output is summed onto each Param before being "finalized"
+#include <map>
+#include <vector>
+#include <algorithm>
 
 //Routes let you send a Modulator into a Parameter
-//The Depth param adjusts the amount, and works like any other Param
-//A second Modulator can be added as a depthSource, that will multiply the first
+//The Depth Param adjusts the amount, and can be targeted like any other Param
+//A second Modulator can be added as source2 and Operations can be performed on the pair
 //Routes are themselves modulators, and can be used/targeted by other routes
 struct Route : public Modulator {
-    Modulator* source = nullptr;
+    enum Operation { MULT, ADD, SUB, MIN, MAX, XOR, CLAMP, FMOD, FOLD, OP_COUNT };
+    Operation operation;
+    Modulator* source1 = nullptr;
+    Modulator* source2 = nullptr;
     Param* destination = nullptr;
-    Modulator* depthSource = nullptr;
     const char* prefix = nullptr;
     Param depth;
 
-    Route(Modulator* src = nullptr, Param* dest = nullptr, Modulator* depthSrc = nullptr, const char* pre = nullptr)
-        : source(src), depthSource(depthSrc), destination(dest), prefix(pre),
-        depth { "Depth", Param::toPercentStr, &prefix } { }
+    Route(Modulator* src1 = nullptr, Param* dest = nullptr, Modulator* src2 = nullptr, const char* pre = nullptr,
+        Operation op = MULT);
 
-    void step() {
-        if (!source) {
-            output = 0;
-            return;
-        }
-
-        float d = depth.get() + depth.modulation;
-        if (depthSource) d *= depthSource->output;
-
-        output = source->output * d; //test .5 depth
-        if (destination) destination->summingNode += output;
-    }
+    void step();
 };
+
+namespace RouteGraph {
+    constexpr uint8_t MAX_NODES = 20 * 4; //max 4 nodes per route * 20 routes
+    constexpr uint8_t UNDISCOVERED = 0xFE, BLANK = 0xFF; //unused Node entries are flagged "BLANK"
+    struct Node {
+        uint8_t index = BLANK;
+        uint8_t lowLink = BLANK;
+        std::vector<uint8_t> children;
+    };
+
+    void generateModOrder(Route* routes, const uint8_t numRoutes, std::map<Param*, Modulator*> paramToOwner, std::vector<Modulator *> & modSort);
+}

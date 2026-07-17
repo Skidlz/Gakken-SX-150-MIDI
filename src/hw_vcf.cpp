@@ -9,7 +9,9 @@ void HW_VCF::setModeHW(Mode newMode) {
 };
 
 void HW_VCF::update() {
-    if (_cutoff.update(cutoff)) updateCutHW(_cutoff.value);
+    for (Param* param : { &cutoff, &resonance, &keyTracking, &drive, &mode }) param->commit();
+
+    if (cutoff.dirty) updateCutHW(cutoff.get());
     if (_mode.update(mode)) setModeHW(_mode.value);
 
     if (resonance.dirty) _resonancePot.write(resonance.get());

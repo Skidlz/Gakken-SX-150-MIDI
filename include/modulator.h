@@ -2,8 +2,6 @@
 #include "Arduino.h"
 #include "parameter.h"
 
-#define CAST_MOD(cls, member) reinterpret_cast<Modulator cls::*>(&cls::member)
-
 class Modulator {
 public:
     virtual void step() = 0;
@@ -12,11 +10,22 @@ public:
     float output = 0;
     float scale = 1;
 
-private:
-
+    Modulator* findOwner(const Param* param) { //return 'this' if we own a given Param
+        //tests if a param is within our memory range, meaning we own it
+        return (param >= (const void*)this && param < (const void*)(this + 1)) ? this : nullptr;
+    }
 protected: //consts for child classes
     static constexpr float TICK_RATE = 4000.0f;
     static constexpr float TICK_RATE_INV = 1/TICK_RATE;
+};
+
+class ValueSource : public Modulator {
+public:
+    float input = 0.0f; //write arbitrary value here to use as a modulator output
+
+    void step() override {
+        output = input;
+    }
 };
 
 //LFO--------------------------------------------------------------------------
@@ -31,11 +40,13 @@ public:
     void setSlew(float rate);
 
     Param rate;
-    Param depth;
     Param waveform;
     Param reset;
     Param slew;
 private:
+    //list of Params that we manage on step()
+    static constexpr Param SW_LFO::* Params[] = { &SW_LFO::rate, &SW_LFO::waveform, &SW_LFO::reset, &SW_LFO::slew };
+
     static constexpr const char* WaveformNames[] = {
         [TRIANGLE]  = "Triangle",
         [SQUARE]    = "Square",
@@ -82,6 +93,8 @@ public:
 
     Param rate;
 private:
+    //list of Params that we manage on step()
+    static constexpr Param SW_CLOCK::* Params[] = { &SW_CLOCK::rate };
     static constexpr uint32_t MAX = UINT32_MAX; //max count
     static constexpr uint32_t HALF_MAX = MAX / 2;
     static constexpr float MIN_HZ = 4.0f;
@@ -118,8 +131,9 @@ public:
     Param decay;
     Param sustain;
     Param release;
-    //Param depth;
 private:
+    //list of Params that we manage on step()
+    static constexpr Param SW_ADSR::* Params[] = { &SW_ADSR::attack, &SW_ADSR::decay, &SW_ADSR::sustain, &SW_ADSR::release };
     struct stage {
         float minPeriod;
         float maxPeriod;
@@ -157,6 +171,8 @@ public:
     Param delay;
     Param attack;
 private:
+    //list of Params that we manage on step()
+    static constexpr Param SW_DA::* Params[] = { &SW_DA::delay, &SW_DA::attack };
     struct stage {
         float minPeriod;
         float maxPeriod;
