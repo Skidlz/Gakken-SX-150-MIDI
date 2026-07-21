@@ -195,21 +195,28 @@ const CCbind ccs[PARAM_COUNT] = {
     { 16, voice.osc.pwm },
     { 17, voice.osc.pwmLFO.rate },
     { 18, voice.osc.pwmLFO.waveform },
-//    { 19, voice.osc.pwmLFO.depth },
     { 19, voice.pwmLFO.depth }, //route 0
     { 20, voice.osc.pwmLFO.reset },
     { 21, voice.osc.pwmDA.delay },
     { 22, voice.osc.pwmDA.attack },
     { 23, voice.osc.pwmADSR.sampHoldClock.rate },
     { 24, voice.osc.pwmLFO.slew },
-//    { 25, voice.vcf.keyTracking },
     { 25, voice.keyTrack.depth }, //route 3
     { 26, voice.vcfAccAmt.depth }, //route 2
     { 27, voice.glideTime }, //TODO: put on CC 5
+    /*
     { 28, voice.accentADSR.attack },
     { 29, voice.accentADSR.decay },
     { 30, voice.accentADSR.sustain },
     { 31, voice.accentADSR.release },
+    */
+        { 28, voice.lfo1.rate },
+        // { 29, voice.lfo2.rate },
+        // { 30, voice.routes[4].depth },
+        { 29, voice.samphold1.rate },
+        { 30, voice.samphold1.slew },
+        { 31, voice.routes[5].depth },
+
     { 32, voice.lfo.rate },
     { 33, voice.lfo.waveform },
     { 34, voice.lfo.resetMode },

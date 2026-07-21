@@ -20,6 +20,9 @@ public:
     HW_ADSR& env;
     SW_ADSR accentADSR { "Acc Env" };
     SW_ADSR vcaADSR { "VCA Env" };
+    SW_LFO lfo1 { "LFO 1"};
+    SW_LFO lfo2 { "LFO 2"};
+    SH_Slew samphold1 { "S/H 1"};
 
     bool gate = false;
     bool glideOn = false;
@@ -31,13 +34,17 @@ public:
     //Route handling variables
     static constexpr uint8_t NUM_ROUTES = 20;
     std::vector<Modulator *> modSort;
-    uint8_t routesUsed = 4;
+    uint8_t routesUsed = 6;
 
     Route routes[NUM_ROUTES] = {
         Route(&osc.pwmLFO, &osc.pwm, &osc.pwmDA, "PWM LFO"), //DA envelope fades in PWM lfo
         Route(&osc.pwmADSR, &osc.pwm, nullptr, "PWM ADSR"),
         Route(&accentADSR, &vcf.cutoff, nullptr, "Act Env > Cut"),
         Route(&vcf.keyTrackMod, &vcf.cutoff, nullptr, "Keytracking"),
+        //Route(&lfo1, &lfo2.rate, nullptr, "LFO1 > LFO2"),
+        //Route(&lfo2, &vcf.cutoff, nullptr, "LFO2 > VCF"),
+        Route(&lfo1, &samphold1.input, nullptr, "LFO1 > S/H"),
+        Route(&samphold1, &vcf.cutoff, nullptr, "S/H > VCF"),
     };
 
     //TODO: move static routes to end of array
@@ -46,6 +53,8 @@ public:
     Route& pwmADSR = routes[1];
     Route& vcfAccAmt = routes[2];
     Route& keyTrack = routes[3];
+
+    Route& lfoSH = routes[4];
 
     Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwmPot, Dac& lfoRateDac, HW_ADSR& adsr);
     void setGlideTime(float time);

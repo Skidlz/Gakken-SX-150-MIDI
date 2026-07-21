@@ -15,6 +15,7 @@ Voice::Voice(Dac& vcfCutDac, DigiPot& resPot, DigiPot& vcfDrivePot, DigiPot& pwm
 
     routes[0].depth.set(64);
     routes[1].depth.set(64);
+    lfoSH.depth.set(64);
 
     modSort.reserve(NUM_ROUTES * 4); //allocate enough room for source1, source2, route, and dest owner
 }

@@ -10,19 +10,23 @@
 //The Depth Param adjusts the amount, and can be targeted like any other Param
 //A second Modulator can be added as source2 and Operations can be performed on the pair
 //Routes are themselves modulators, and can be used/targeted by other routes
-struct Route : public Modulator {
+class Route : public Modulator {
+public:
     enum Operation { MULT, ADD, SUB, MIN, MAX, XOR, CLAMP, FMOD, FOLD, OP_COUNT };
-    Operation operation;
     Modulator* source1 = nullptr;
     Modulator* source2 = nullptr;
     Param* destination = nullptr;
-    const char* prefix = nullptr;
+    SimpleParam operation;
     Param depth;
 
     Route(Modulator* src1 = nullptr, Param* dest = nullptr, Modulator* src2 = nullptr, const char* pre = nullptr,
         Operation op = MULT);
 
     void step();
+private:
+    const char* prefix = nullptr;
+    static constexpr const char* OperationNames[] = { "Multiply", "Add",  "Sub", "Min", "Max", "Xor", "Clamp", "Fmod", "Fold" };
+    EnumParam<Operation, OP_COUNT, OperationNames, 9> _operation;
 };
 
 namespace RouteGraph {

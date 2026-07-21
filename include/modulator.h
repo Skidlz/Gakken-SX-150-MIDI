@@ -39,10 +39,7 @@ public:
     void setRate(float rate);
     void setSlew(float rate);
 
-    Param rate;
-    Param waveform;
-    Param reset;
-    Param slew;
+    Param rate, waveform, reset, slew;
 private:
     //list of Params that we manage on step()
     static constexpr Param SW_LFO::* Params[] = { &SW_LFO::rate, &SW_LFO::waveform, &SW_LFO::reset, &SW_LFO::slew };
@@ -81,7 +78,7 @@ private:
     float _currentSlewed = 0;
 };
 
-//Clock-------------------------------------------------------------------------
+//Clock------------------------------------------------------------------------
 class SW_CLOCK : public Modulator {
 public:
     SW_CLOCK(const char* p);
@@ -125,12 +122,7 @@ public:
 
     SW_CLOCK sampHoldClock { "ADSR" }; //TODO add prefix support
 
-    float values[STAGE_COUNT];
-
-    Param attack;
-    Param decay;
-    Param sustain;
-    Param release;
+    Param attack, decay, sustain, release;
 private:
     //list of Params that we manage on step()
     static constexpr Param SW_ADSR::* Params[] = { &SW_ADSR::attack, &SW_ADSR::decay, &SW_ADSR::sustain, &SW_ADSR::release };
@@ -166,10 +158,7 @@ public:
     void gateOn() override;
     void gateOff() override;
 
-    float values[2];
-
-    Param delay;
-    Param attack;
+    Param delay, attack;
 private:
     //list of Params that we manage on step()
     static constexpr Param SW_DA::* Params[] = { &SW_DA::delay, &SW_DA::attack };
@@ -190,4 +179,42 @@ private:
     Stage _currentStage;
 
     float _phase = 0;
+};
+
+//Slew processor---------------------------------------------------------------
+class SH_Slew : public Modulator {
+public:
+    SH_Slew(const char* p);
+    void step() override;
+    void gateOn() override;
+    void setRate(float rate);
+    void setSlew(float rate);
+    bool sync = true;
+
+    Param input, rate, slew;
+private:
+    //list of Params that we manage on step()
+    static constexpr Param SH_Slew::* Params[] = { &SH_Slew::input, &SH_Slew::rate, &SH_Slew::slew };
+
+    static constexpr uint32_t MAX = UINT32_MAX; //max count
+    static constexpr uint32_t HALF_MAX = MAX / 2;
+    static constexpr float MIN_HZ = 4.0f;
+    static constexpr float MAX_HZ = 200.0f;
+    static constexpr float RANGE = MAX_HZ / MIN_HZ; //precalc LFO range
+
+    static constexpr float MIN_SLEW = 0.01f;
+    static constexpr float MAX_SLEW = 100.0f;
+    static constexpr float SLEW_RANGE = MAX_SLEW / MIN_SLEW; //precalc slew range
+
+    const char* prefix;
+    static const char* getRateStr(char* buf, size_t len, uint8_t v);
+    static const char* getSlewStr(char* buffer, size_t size, uint8_t value);
+
+    uint32_t _stepSize = 1;
+    uint32_t _phase = 0;
+
+    float _slewRate = 0;
+    float _currentSlewed = 0;
+
+    float _targetValue = 0;
 };

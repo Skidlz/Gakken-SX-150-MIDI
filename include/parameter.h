@@ -67,8 +67,8 @@ struct Param : public SimpleParam {
     float get() {
         float newValue = SimpleParam::get() + modulation;
 
-        if (newValue < 0) newValue = 0; //clip to 0.0-1.0
-        if (newValue > 1) newValue = 1;
+        if (newValue < -1) newValue = -1; //clip to ±1
+        else if (newValue > 1) newValue = 1;
 
         return newValue;
     }
@@ -96,7 +96,7 @@ struct EnumParam {
         return true;
     }
 
-    bool update(Param& p) { //update enum from param. return true if the *enum* changed
+    bool update(SimpleParam& p) { //update enum from param. return true if the *enum* changed
         if (!p.dirty) return false;
 
         return set(p.get());

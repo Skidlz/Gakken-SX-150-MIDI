@@ -181,7 +181,6 @@ void SW_ADSR::setRate(Stage stage, float newRate) {
 }
 
 void SW_ADSR::setSustain(float sustain) {
-    values[SUSTAIN] = sustain;
     _stages[DECAY].target = sustain;
 }
 
@@ -288,4 +287,83 @@ void SW_DA::step() { //delay at 0, expo rise to 1 __..'¯¯¯
         case STALL:
             output = 1;
     }
+}
+
+//Slew processor-----------------------------------------------------------------------------------
+SH_Slew::SH_Slew(const char* p) : prefix(p),
+        input { "Input", Param::toIntStr, &prefix },
+        rate { "Rate", getRateStr, &prefix },
+        slew { "Slew", getSlewStr, &prefix } {
+
+    _phase = 0;
+    setRate(.5);
+    step();
+}
+
+void SH_Slew::step() {
+    //commit any modulation waiting on our Params
+    for (const auto param : Params) (this->*param).commit();
+
+    if (rate.dirty) setRate(rate.get());
+    if (slew.dirty) setSlew(slew.get());
+
+    //only update target when clock crosses threshold
+    bool oldPhase = _phase > HALF_MAX;
+    _phase += _stepSize;
+    if (!oldPhase && _phase > HALF_MAX) _targetValue = input.get();
+
+    //slew rate limit
+    if (slew.value > 0 && abs(_targetValue - _currentSlewed) > _slewRate)
+        _currentSlewed += _slewRate * ((_targetValue > _currentSlewed) ? 1 : -1);
+    else _currentSlewed = _targetValue;
+
+    output = _currentSlewed; //±1
+}
+
+void SH_Slew::gateOn() { //reset LFO
+    if (sync) _phase = HALF_MAX - 1;
+}
+
+void SH_Slew::setRate(float rate) { //0-1 rate = 200-4Hz
+    float freq = MIN_HZ * powf(RANGE, (1 - rate)); //low val = higher clock
+
+    _stepSize = (uint32_t)(MAX / TICK_RATE * freq );
+}
+
+
+void SH_Slew::setSlew(float rate) { //0-1 rate = 50-.01Hz
+    float freq = MIN_SLEW * powf(SLEW_RANGE, 1 - rate);
+    _slewRate = freq / TICK_RATE;
+}
+
+const char* SH_Slew::getRateStr(char* buf, size_t len, uint8_t v) {
+    if (!v) return " Off";
+
+    float freq = MIN_HZ * powf(RANGE, (127 - v) / 127.0);
+
+    char floatBuffer[10]; //buffer for float to string
+    const uint8_t decimalPlaces = (freq < 1) ? 3 : (freq < 10) ? 2 : 1;
+    dtostrf(freq, 5, decimalPlaces, floatBuffer);
+    snprintf(buf, len, "%6sHz", floatBuffer); //pad number
+
+    return buf;
+}
+
+const char* SH_Slew::getSlewStr(char* buffer, size_t size, uint8_t value) {
+    if (value == 0) return "Off";
+
+    float freq = MIN_SLEW * powf(SLEW_RANGE, 1 - (value / 127.0));
+
+    char floatBuffer[10]; //buffer for float to string
+    float timeInS = 1 / freq;
+    if (timeInS < 1) {
+        uint16_t timeInMs = timeInS * 1000;
+        snprintf(buffer, size, "%6d ms", timeInMs); //pad number
+    } else {
+        const uint8_t decimalPlaces = (timeInS < 10) ? 3 : (timeInS < 100) ? 2 : 1;
+        dtostrf(timeInS, 5, decimalPlaces, floatBuffer);
+        snprintf(buffer, size, "%6s s", floatBuffer); //pad number
+    }
+
+    return buffer;
 }

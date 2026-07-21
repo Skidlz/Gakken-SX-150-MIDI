@@ -1,11 +1,15 @@
 #include "route.h"
 
 Route::Route(Modulator* src1, Param* dest, Modulator* src2, const char* pre, Operation op)
-    : source1(src1), source2(src2), destination(dest), prefix(pre), operation(op), depth { "Depth", Param::toPercentStr, &prefix } {
+    : source1(src1), source2(src2), destination(dest), prefix(pre),
+        depth { "Depth", Param::toPercentStr, &prefix },
+        operation { "Operation", _operation.getStr, &prefix } {
+    _operation.value = op;
 }
 
 void Route::step() {
     depth.commit();
+    _operation.update(operation);
 
     if (!source1) {
         output = 0;
@@ -17,7 +21,7 @@ void Route::step() {
         float& input1 = source1->output; //alias
         float& input2 = source2->output; //alias
 
-        switch (operation) {
+        switch (_operation.value) {
             case MULT:  combined = input1 * input2; break;
             case ADD:   combined = input1 + input2; break;
             case SUB:   combined = input1 - input2; break;
